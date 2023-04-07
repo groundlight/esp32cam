@@ -7,12 +7,9 @@ On first boot the device will launch access point to set wifi credentials, detec
 
 Works well with M5Stack ESP32 Camera, ESP32CAM, and likely others but would need to verify and update the pinouts.  Some hardware devices are more reliable than others and the software makes regular attempts to reboot as necessary which often gets things going again.
 
-To build and deploy, install the Arduino IDE 2.0, ESP32 board package, and upload to target board.
-        
-        These instructions are excellent.  https://randomnerdtutorials.com/installing-the-esp32-board-in-arduino-ide-mac-and-linux-instructions/
+To build and deploy, install the Arduino IDE 2.0, ESP32 board package, and upload to target board.  These instructions are excellent.  https://randomnerdtutorials.com/installing-the-esp32-board-in-arduino-ide-mac-and-linux-instructions/
 
-        You will also need to install the WifiManager (https://github.com/tzapu/WiFiManager) and ArduinoJson (https://github.com/bblanchon/ArduinoJson) libraries
-
+You will also need to install the WifiManager (https://github.com/tzapu/WiFiManager) and ArduinoJson (https://github.com/bblanchon/ArduinoJson) libraries
 
 Note that API key is stored in plaintext in the file system on the ESP32.  Please generate a dedicated key for your device if possible. 
 

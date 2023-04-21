@@ -30,18 +30,12 @@ SOFTWARE.
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <sstream>
+#include <SPIFFS.h>
+#include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
 
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "Base64.h"
-
-#ifdef ESP32
-#include <SPIFFS.h>
-#endif
-
-#include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
-
-#include "config.h"
 
 #define FORMAT_SPIFFS_IF_FAILED true
 
@@ -100,8 +94,8 @@ char groundlight_endpoint[40] = "api.groundlight.ai";
 char groundlight_API_key[75] = "api_yourgroundlightapikeyhere";
 char groundlight_det_name[100] = "det_xxxyourdetectoridhere";
 char groundlight_det_query[100] = "your query text here?";
-char groundlight_det_confidence[5] = "0.9";
-char groundlight_take_action_on[6] = "YES";
+char groundlight_det_confidence[5] = "0.9"; // 90% confidence for queries [0.5 - 1.0]
+char groundlight_take_action_on[6] = "YES"; // YES or NO
 char groundlight_action_channel[10] = "SLACK";
 char slack_url[100] = "https://hooks.slack.com/services/blah/blah/blah";
 char delay_between_queries_ms[10] = "30000";
@@ -110,7 +104,7 @@ camera_fb_t *frame = NULL;
 bool actionSaveConfig = false;
 bool resetParameters = false;
 
-float targetConfidence = DEFAULT_TARGET_CONFIDENCE;
+float targetConfidence = atof(groundlight_det_confidence);
 int failures_before_restart = 5;
 
 void check_excessive_failures()
@@ -387,10 +381,6 @@ void setup()
   // Serial.printf("using api key : %s\n", groundlight_API_key);
 
   targetConfidence = atof(groundlight_det_confidence);
-  if (targetConfidence == 0)
-  {
-    targetConfidence = DEFAULT_TARGET_CONFIDENCE;
-  }
 
   if (!adjust_confidence(groundlight_endpoint, groundlight_det_name, targetConfidence + 0.01, groundlight_API_key))
   {
@@ -482,10 +472,7 @@ void loop()
   esp_camera_fb_return(frame);
 
   int query_delay = atoi(delay_between_queries_ms);
-  if (query_delay == 0)
-  {
-    query_delay = DEFAULT_DELAY_BETWEEN_QUERIES_MS;
-  }
+
   Serial.printf("waiting %dms between queries...", query_delay);
   delay(query_delay);
   Serial.println("taking another lap!");

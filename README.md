@@ -29,6 +29,8 @@ This project is designed as a platform io project for any ESP32 Camera board. To
 
 ## Building in the Arduino IDE
 
-To build and deploy, install the Arduino IDE 2.0, ESP32 board package, and upload to target board.  These instructions are excellent. https://randomnerdtutorials.com/installing-the-esp32-board-in-arduino-ide-mac-and-linux-instructions/
+To build and deploy, install the Arduino IDE 2.0, ESP32 board package, Libraries, and upload to target board. These instructions are excellent. https://randomnerdtutorials.com/installing-the-esp32-board-in-arduino-ide-mac-and-linux-instructions/
+
+You can open the project in the Arduino IDE by opening ["edgelight.ino"](./edgelight/src/edgelight.ino)
 
 You will also need to install the WifiManager (https://github.com/tzapu/WiFiManager) and ArduinoJson (https://github.com/bblanchon/ArduinoJson) libraries.

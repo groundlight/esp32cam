@@ -25,13 +25,13 @@ SOFTWARE.
 */
 
 #include <FS.h>
-#include <WiFiManager.h>  // https://github.com/tzapu/WiFiManager
+#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 #include <esp_camera.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <sstream>
 #include <SPIFFS.h>
-#include <ArduinoJson.h>  // https://github.com/bblanchon/ArduinoJson
+#include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
 
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
@@ -91,11 +91,11 @@ SOFTWARE.
 
 // Options to configure these settings will be surfaced when the user connects to the device's AP
 char groundlight_endpoint[40] = "api.groundlight.ai";
-char groundlight_API_key[75] = "api_2R7GfZwHJ5ef7l8zmebTwu5GoPR_a5ZKibaJjgQ2EAYPwKhxcUVg4dsK1QsdPX";
-char groundlight_det_name[100] = "det_is_max_working";
-char groundlight_det_query[100] = "Is max working?";
-char groundlight_det_confidence[5] = "0.9";  // 90% confidence for queries [0.5 - 1.0]
-char groundlight_take_action_on[6] = "YES";  // YES or NO
+char groundlight_API_key[75] = "api_yourgroundlightapikeyhere";
+char groundlight_det_name[100] = "det_xxxyourdetectoridhere";
+char groundlight_det_query[100] = "your query text here?";
+char groundlight_det_confidence[5] = "0.9"; // 90% confidence for queries [0.5 - 1.0]
+char groundlight_take_action_on[6] = "YES"; // YES or NO
 char groundlight_action_channel[10] = "SLACK";
 char slack_url[100] = "https://hooks.slack.com/services/blah/blah/blah";
 char delay_between_queries_ms[10] = "30000";
@@ -107,26 +107,32 @@ bool resetParameters = false;
 float targetConfidence = atof(groundlight_det_confidence);
 int failures_before_restart = 5;
 
-void check_excessive_failures() {
+void check_excessive_failures()
+{
   failures_before_restart -= 1;
-  if (failures_before_restart == 0) {
+  if (failures_before_restart == 0)
+  {
     Serial.println("Too many failures! Restarting!");
     delay(2000);
     ESP.restart();
   }
 }
 
-void saveConfigCallback() {
+void saveConfigCallback()
+{
   Serial.println("Setting flag to save config");
   actionSaveConfig = true;
 }
 
-bool loadParams() {
-  if (SPIFFS.exists("/config.json")) {
+bool loadParams()
+{
+  if (SPIFFS.exists("/config.json"))
+  {
     // file exists, reading and loading
     Serial.println("reading config file");
     File configFile = SPIFFS.open("/config.json", "r");
-    if (configFile) {
+    if (configFile)
+    {
       Serial.println("opened config file");
       size_t size = configFile.size();
       // Allocate a buffer to store contents of the file.
@@ -137,7 +143,8 @@ bool loadParams() {
       auto deserializeError = deserializeJson(json, buf.get());
       Serial.println("Parsing json...");
       serializeJson(json, Serial);
-      if (!deserializeError) {
+      if (!deserializeError)
+      {
         strcpy(groundlight_endpoint, json["endpoint"]);
         strcpy(groundlight_API_key, json["API_key"]);
         strcpy(groundlight_det_name, json["det_name"]);
@@ -147,21 +154,26 @@ bool loadParams() {
         strcpy(groundlight_action_channel, json["action"]);
         strcpy(slack_url, json["slack_url"]);
         strcpy(delay_between_queries_ms, json["delay_between_queries_ms"]);
-      } else {
+      }
+      else
+      {
         Serial.println("Failed to parse json config!");
         return false;
       }
       configFile.close();
       return true;
     }
-  } else {
-    return false;  // parameter file does not exist
+  }
+  else
+  {
+    return false; // parameter file does not exist
   }
 
   return true;
 }
 
-bool saveParams() {
+bool saveParams()
+{
   Serial.println("Saving parameters... ");
   DynamicJsonDocument json(1024);
   json["endpoint"] = groundlight_endpoint;
@@ -175,7 +187,8 @@ bool saveParams() {
   json["delay_between_queries_ms"] = delay_between_queries_ms;
 
   File configFile = SPIFFS.open("/config.json", "w");
-  if (!configFile) {
+  if (!configFile)
+  {
     Serial.println("failed to open config file for writing");
     return false;
   }
@@ -187,25 +200,30 @@ bool saveParams() {
   return true;
 }
 
-void flashLED(int ms, int repeats) {
+void flashLED(int ms, int repeats)
+{
 
 #if defined(GPIO_LED_FLASH)
-  for (int i = 0; i < repeats; i++) {
+  for (int i = 0; i < repeats; i++)
+  {
     digitalWrite(GPIO_LED_FLASH, HIGH);
     delay(ms);
     digitalWrite(GPIO_LED_FLASH, LOW);
 
     // no blanking delay on the last flash
-    if (i < (repeats - 1)) {
+    if (i < (repeats - 1))
+    {
       delay(ms);
     }
   }
 #endif
 }
 
-void setup() {
+void setup()
+{
 
-  if (GPIO_RESET_CREDENTIALS >= 0) {
+  if (GPIO_RESET_CREDENTIALS >= 0)
+  {
     pinMode(GPIO_RESET_CREDENTIALS, INPUT_PULLDOWN);
     resetParameters = (digitalRead(GPIO_RESET_CREDENTIALS) == HIGH);
   }
@@ -215,14 +233,15 @@ void setup() {
   digitalWrite(GPIO_LED_FLASH, LOW);
 #endif
 
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);  // disable brownout detector maybe not necessary
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // disable brownout detector maybe not necessary
 
   Serial.begin(115200);
   Serial.println("Edgelight waking up...");
 
   // use the ESP32 ChipID as an identifier for the Wifi AP
   uint32_t likely_unique_ID = 0;
-  for (int i = 0; i < 17; i += 8) {
+  for (int i = 0; i < 17; i += 8)
+  {
     uint8_t current_byte = (ESP.getEfuseMac() >> (40 - i)) & 0xff;
     likely_unique_ID |= current_byte << i;
   }
@@ -256,34 +275,43 @@ void setup() {
   config.pixel_format = PIXFORMAT_JPEG;
 
   // Photo Quality Settings
-  config.frame_size = FRAMESIZE_UXGA;  // See here for a list of options and resolutions: https://github.com/espressif/esp32-camera/blob/master/driver/include/sensor.h#L84
-  config.jpeg_quality = 10;            // lower means higher quality
+  config.frame_size = FRAMESIZE_UXGA; // See here for a list of options and resolutions: https://github.com/espressif/esp32-camera/blob/master/driver/include/sensor.h#L84
+  config.jpeg_quality = 10;           // lower means higher quality
   config.fb_count = 2;
 
   esp_err_t error_code = esp_camera_init(&config);
-  if (error_code != ESP_OK) {
+  if (error_code != ESP_OK)
+  {
     Serial.printf("Camera init failed with error 0x%x", error_code);
     Serial.println("Restarting system!");
     flashLED(100, 2);
     delay(3000);
-    ESP.restart();  // some boards are less reliable for initialization and will everntually just start working
+    ESP.restart(); // some boards are less reliable for initialization and will everntually just start working
     return;
   }
 
   Serial.print("Mounting File System...");
 
-  if (SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
+  if (SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED))
+  {
     Serial.println("Success!");
-  } else {
+  }
+  else
+  {
     Serial.println("failed to mount file System!");
     // this is annoying but not fatal
   }
 
-  if (resetParameters) {
+  if (resetParameters)
+  {
     Serial.println("ignoring file system parameters");
-  } else if (loadParams()) {
+  }
+  else if (loadParams())
+  {
     Serial.println("parameters loaded from filesystem");
-  } else {
+  }
+  else
+  {
     Serial.println("failed to load existing parameters from filesystem");
   }
 
@@ -310,14 +338,16 @@ void setup() {
   wm.addParameter(&custom_slack_url);
   wm.addParameter(&custom_delay_between_queries_ms);
 
-  if (resetParameters) {
+  if (resetParameters)
+  {
     Serial.println("Reset button activated.  Forcing launch of wifi manager to reset network");
     wm.resetSettings();
     flashLED(250, 5);
   }
 
   wm.setBreakAfterConfig(true);
-  if (!wm.autoConnect(edgelight_AP_name, "edgelight")) {
+  if (!wm.autoConnect(edgelight_AP_name, "edgelight"))
+  {
     Serial.println("Failed to connect to WiFi with user-provided settings");
     Serial.println("Rebooting in 3 seconds");
     delay(3000);
@@ -327,7 +357,8 @@ void setup() {
   }
 
   // save the custom parameters to FS
-  if (actionSaveConfig) {
+  if (actionSaveConfig)
+  {
     strcpy(groundlight_endpoint, custom_groundlight_endpoint.getValue());
     strcpy(groundlight_API_key, custom_groundlight_API_key.getValue());
     strcpy(groundlight_det_name, custom_groundlight_det_name.getValue());
@@ -351,7 +382,8 @@ void setup() {
 
   targetConfidence = atof(groundlight_det_confidence);
 
-  if (!adjust_confidence(groundlight_endpoint, groundlight_det_name, targetConfidence + 0.01, groundlight_API_key)) {
+  if (!adjust_confidence(groundlight_endpoint, groundlight_det_name, targetConfidence + 0.01, groundlight_API_key))
+  {
     Serial.println("unable to adjust detector confidence.  restarting to try again!  no point in continuing if we can't get to the GL server!");
     ESP.restart();
     delay(2000);
@@ -368,14 +400,16 @@ String answer = "NONE";
 String prevAnswer = "NONE";
 float confidence = 0.0;
 
-void loop() {
+void loop()
+{
   // get image from camera into a buffer
   flashLED(50, 1);
   frame = esp_camera_fb_get();
-  if (!frame) {
+  if (!frame)
+  {
     Serial.println("Camera capture failed!  Restarting system!");
     delay(3000);
-    ESP.restart();  // maybe this will fix things?  hard to say. its not going to be worse
+    ESP.restart(); // maybe this will fix things?  hard to say. its not going to be worse
   }
 
   Serial.printf("Captured image.  Encoded size is %d bytes\n", frame->len);
@@ -384,11 +418,13 @@ void loop() {
   get_query_id(queryResults).toCharArray(posicheck_id, 50);
 
   retries = 0;
-  while (get_query_confidence(queryResults) < targetConfidence) {
+  while (get_query_confidence(queryResults) < targetConfidence)
+  {
     queryResults = get_image_query(groundlight_endpoint, posicheck_id, groundlight_API_key);
 
     retries = retries + 1;
-    if (retries > retryLimit) {
+    if (retries > retryLimit)
+    {
       break;
     }
   }
@@ -396,25 +432,37 @@ void loop() {
   answer = get_query_label(queryResults);
   confidence = get_query_confidence(queryResults);
 
-  if (confidence >= targetConfidence) {
-    if (answer == "PASS") {
-      if (answer == prevAnswer) {
+  if (confidence >= targetConfidence)
+  {
+    if (answer == "PASS")
+    {
+      if (answer == prevAnswer)
+      {
         Serial.println("(nothing new here.");
-      } else {
+      }
+      else
+      {
         Serial.println("updating status notification");
         post_slack_update("whatever we were waiting for just happened!");
         prevAnswer = answer;
       }
-    } else if (answer == "FAIL") {
-      if (answer == prevAnswer) {
+    }
+    else if (answer == "FAIL")
+    {
+      if (answer == prevAnswer)
+      {
         Serial.println("nothing new here.");
-      } else {
+      }
+      else
+      {
         post_slack_update("waiting for the thing to happen again!");
       }
       prevAnswer = answer;
     }
     Serial.print("Confident answer : ");
-  } else {
+  }
+  else
+  {
     Serial.print("Tentative answer : ");
   }
 
@@ -430,21 +478,24 @@ void loop() {
   Serial.println("taking another lap!");
 }
 
-String get_query_id(const String &jsonResults) {
+String get_query_id(const String &jsonResults)
+{
   DynamicJsonDocument results(1024);
   auto deserializeError = deserializeJson(results, jsonResults);
   const char *id = results["id"] | "PARSING_FAILURE";
   return String(id);
 }
 
-String get_query_label(const String &jsonResults) {
+String get_query_label(const String &jsonResults)
+{
   DynamicJsonDocument results(1024);
   auto deserializeError = deserializeJson(results, jsonResults);
   const char *label = results["result"]["label"] | "PARSING_FAILURE";
   return String(label);
 }
 
-float get_query_confidence(const String &jsonResults) {
+float get_query_confidence(const String &jsonResults)
+{
   DynamicJsonDocument results(1024);
   auto deserializeError = deserializeJson(results, jsonResults);
   float confidence = results["result"]["confidence"] | 0.0;
@@ -453,7 +504,8 @@ float get_query_confidence(const String &jsonResults) {
 }
 
 // Posts a message to a Slack channel.
-bool post_slack_update(const char message[]) {
+bool post_slack_update(const char message[])
+{
   Serial.print("Posting message to Slack: ");
   Serial.println(message);
 
@@ -474,7 +526,8 @@ bool post_slack_update(const char message[]) {
   WiFiClientSecure *client = new WiFiClientSecure;
   HTTPClient https;
 
-  if (client) {
+  if (client)
+  {
     client->setInsecure();
     https.setTimeout(10000);
 
@@ -482,7 +535,8 @@ bool post_slack_update(const char message[]) {
     Serial.println(slack_url);
 
     // Start HTTPS connection.
-    if (https.begin(*client, slack_url)) {
+    if (https.begin(*client, slack_url))
+    {
       Serial.print("Attempting [HTTPS] POST...\n");
 
       String requestBody;
@@ -498,21 +552,28 @@ bool post_slack_update(const char message[]) {
       // Send the POST request and get the response code.
       int httpsResponseCode = https.POST(requestBody);
 
-      if (httpsResponseCode > 0) {
+      if (httpsResponseCode > 0)
+      {
         Serial.printf("[HTTPS] POST... code: %d\n", httpsResponseCode);
-      } else {
+      }
+      else
+      {
         Serial.printf("[HTTPS] POST... failed, error: %d %s\n", httpsResponseCode, https.errorToString(httpsResponseCode).c_str());
         Serial.println("(It probably still posted to Slack!)");
       }
 
       https.end();
-    } else {
+    }
+    else
+    {
       Serial.print("Unable to connect to ");
       Serial.println(slack_url);
     }
 
     delete client;
-  } else {
+  }
+  else
+  {
     Serial.println("Unable to create client for HTTPS");
   }
 
@@ -520,7 +581,8 @@ bool post_slack_update(const char message[]) {
 }
 
 // Collects an HTTP response using an Arduino-compatible implementation
-String collectHttpResponse(WiFiClient &client) {
+String collectHttpResponse(WiFiClient &client)
+{
   int timeoutDuration = 20000;
   long startTime = millis();
   bool isBodyReceived = false;
@@ -528,30 +590,38 @@ String collectHttpResponse(WiFiClient &client) {
   String responseLine;
 
   // Keep reading until timeout or a valid response body is received
-  while ((startTime + timeoutDuration) > millis()) {
+  while ((startTime + timeoutDuration) > millis())
+  {
     Serial.print(".");
     delay(200);
-    while (client.available()) {
+    while (client.available())
+    {
       char receivedChar = client.read();
 
       // Check for a new line in the response
-      if (receivedChar == '\n') {
-        if (responseLine.length() == 0) {
+      if (receivedChar == '\n')
+      {
+        if (responseLine.length() == 0)
+        {
           isBodyReceived = true;
         }
         responseLine = "";
-      } else if (receivedChar != '\r') {
+      }
+      else if (receivedChar != '\r')
+      {
         responseLine += String(receivedChar);
       }
 
       // Append the received character to the response body if needed
-      if (isBodyReceived) {
+      if (isBodyReceived)
+      {
         responseBody += String(receivedChar);
       }
       startTime = millis();
     }
 
-    if (responseBody.length() > 0) {
+    if (responseBody.length() > 0)
+    {
       break;
     }
   }
@@ -563,17 +633,21 @@ String collectHttpResponse(WiFiClient &client) {
   return responseBody;
 }
 
-String submit_image_query(camera_fb_t *image_bytes, char *endpoint, char *detector_id, char *api_token) {
+String submit_image_query(camera_fb_t *image_bytes, char *endpoint, char *detector_id, char *api_token)
+{
   WiFiClientSecure client;
   String responseBody;
 
   client.setInsecure();
 
-  if (!client.connect(endpoint, 443)) {
+  if (!client.connect(endpoint, 443))
+  {
     Serial.println("SSL connection failure!");
     check_excessive_failures();
     return "{ \"result\" : { \"confidence\" : 0.0, \"label\" : \"QUERY_FAIL\" }";
-  } else {
+  }
+  else
+  {
     Serial.println("SSL client connected");
   }
   client.setTimeout(120);
@@ -593,7 +667,8 @@ String submit_image_query(camera_fb_t *image_bytes, char *endpoint, char *detect
   client.println(api_token);
   client.print("\r\n");
 
-  if (!client.connected()) {
+  if (!client.connected())
+  {
     Serial.println("SSL appears to be dead. returning QUERY_FAIL");
     check_excessive_failures();
     return "{ \"result\" : { \"confidence\" : 0.0, \"label\" : \"QUERY_FAIL\" }";
@@ -605,12 +680,16 @@ String submit_image_query(camera_fb_t *image_bytes, char *endpoint, char *detect
 
   Serial.printf("Writing %d byte image in %d-byte chunks", image_size, chunk_size);
 
-  for (size_t n = 0; n < image_size; n += chunk_size) {
-    if (n + chunk_size < image_size) {
+  for (size_t n = 0; n < image_size; n += chunk_size)
+  {
+    if (n + chunk_size < image_size)
+    {
       client.write(image, chunk_size);
       Serial.print(".");
       image += chunk_size;
-    } else if (image_size % chunk_size > 0) {
+    }
+    else if (image_size % chunk_size > 0)
+    {
       size_t rem = image_size % chunk_size;
       client.write(image, rem);
       Serial.printf(".");
@@ -620,19 +699,23 @@ String submit_image_query(camera_fb_t *image_bytes, char *endpoint, char *detect
 
   client.print("\r\n");
 
-  if (client.connected()) {
+  if (client.connected())
+  {
     Serial.print("collecting response...");
     String responseBody = collectHttpResponse(client);
     client.stop();
     return responseBody;
-  } else {
+  }
+  else
+  {
     Serial.println("SSL appears to be dead.  returning QUERY_FAIL");
     check_excessive_failures();
     return "{ \"result\" : { \"confidence\" : 0.0, \"label\" : \"QUERY_FAIL\" }";
   }
 }
 
-String get_image_query(char *endpoint, char *query_id, char *api_token) {
+String get_image_query(char *endpoint, char *query_id, char *api_token)
+{
   /*
     char url[128] = "https://";
     strcat(url, endpoint);
@@ -646,29 +729,36 @@ String get_image_query(char *endpoint, char *query_id, char *api_token) {
 
   Serial.print("Checking for image query results...");
 
-  if (client) {
+  if (client)
+  {
     {
       client->setInsecure();
       HTTPClient https;
       https.setTimeout(10000);
 
-      if (https.begin(*client, url)) {
+      if (https.begin(*client, url))
+      {
 
         https.addHeader("X-API-Token", api_token);
         https.addHeader("Content-Type", "application/json");
 
         int httpsResponseCode = https.GET();
 
-        if (httpsResponseCode > 0) {
+        if (httpsResponseCode > 0)
+        {
           Serial.printf("[HTTPS] response : %d\n", httpsResponseCode);
           response = https.getString();
           Serial.println("response body : " + response);
-        } else {
+        }
+        else
+        {
           Serial.printf("[HTTPS] POST... failed, error: %d %s\n", httpsResponseCode, https.errorToString(httpsResponseCode).c_str());
           Serial.println("check the logs!");
         }
         https.end();
-      } else {
+      }
+      else
+      {
         Serial.print("Unable to connect to ");
         Serial.println(url);
         check_excessive_failures();
@@ -676,7 +766,9 @@ String get_image_query(char *endpoint, char *query_id, char *api_token) {
     }
 
     delete client;
-  } else {
+  }
+  else
+  {
     Serial.println("Unable to connect to " + String(endpoint));
     check_excessive_failures();
   }
@@ -685,7 +777,8 @@ String get_image_query(char *endpoint, char *query_id, char *api_token) {
 }
 
 // Adjusts the confidence threshold for a predictor in the API.
-bool adjust_confidence(const char *endpoint, const char *predictorId, float confidence, const char *apiToken) {
+bool adjust_confidence(const char *endpoint, const char *predictorId, float confidence, const char *apiToken)
+{
   bool success = true;
 
   // Construct the URL for the PATCH request.
@@ -702,7 +795,8 @@ bool adjust_confidence(const char *endpoint, const char *predictorId, float conf
   WiFiClientSecure *client = new WiFiClientSecure;
   HTTPClient https;
 
-  if (client) {
+  if (client)
+  {
     client->setInsecure();
     https.setTimeout(10000);
 
@@ -710,7 +804,8 @@ bool adjust_confidence(const char *endpoint, const char *predictorId, float conf
     Serial.println(url);
 
     // Start HTTPS connection.
-    if (https.begin(*client, url)) {
+    if (https.begin(*client, url))
+    {
       String requestBody;
       serializeJson(requestData, requestBody);
 
@@ -726,24 +821,31 @@ bool adjust_confidence(const char *endpoint, const char *predictorId, float conf
       int httpsResponseCode = https.PATCH(requestBody);
 
       // Check if the PATCH request was successful.
-      if (httpsResponseCode > 0) {
+      if (httpsResponseCode > 0)
+      {
         Serial.printf("[HTTPS] PATCH... code: %d\n", httpsResponseCode);
         Serial.println(https.getString());
-      } else {
+      }
+      else
+      {
         Serial.printf("[HTTPS] PATCH... failed, error: %d %s\n", httpsResponseCode, https.errorToString(httpsResponseCode).c_str());
         Serial.println("Check the logs!");
         success = false;
       }
 
       https.end();
-    } else {
+    }
+    else
+    {
       Serial.print("Unable to connect to ");
       Serial.println(url);
       success = false;
     }
 
     delete client;
-  } else {
+  }
+  else
+  {
     Serial.println("Unable to create client for HTTPS");
     success = false;
   }
@@ -751,13 +853,16 @@ bool adjust_confidence(const char *endpoint, const char *predictorId, float conf
   return success;
 }
 
-void wait_forever() {
+void wait_forever()
+{
   int scrap;
   Serial.println("STOPPING HERE! (you can press a key to continue though)");
-  while (Serial.available() == 0) {
+  while (Serial.available() == 0)
+  {
     continue;
   }
-  while (Serial.available()) {
+  while (Serial.available())
+  {
     scrap = Serial.read();
   }
 }

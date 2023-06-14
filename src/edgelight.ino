@@ -43,8 +43,8 @@ SOFTWARE.
 #define GPIO_RESET_CREDENTIALS -1
 
 // set the board type here.  check the pin definitions below to match your actual board
-// #define CAMERA_MODEL_ESP32_CAM_BOARD 1
-#define CAMERA_MODEL_M5STACK_PSRAM 1
+#define CAMERA_MODEL_ESP32_CAM_BOARD 1
+// #define CAMERA_MODEL_M5STACK_PSRAM 1
 
 #if defined(CAMERA_MODEL_ESP32_CAM_BOARD)
 #define PWDN_GPIO_NUM 32

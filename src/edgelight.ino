@@ -36,6 +36,7 @@ SOFTWARE.
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "Base64.h"
+#include "twilio.hpp"
 
 #define FORMAT_SPIFFS_IF_FAILED true
 
@@ -98,14 +99,20 @@ char groundlight_det_confidence[5] = "0.9"; // 90% confidence for queries [0.5 -
 char groundlight_take_action_on[6] = "YES"; // YES or NO
 char groundlight_action_channel[10] = "SLACK";
 char slack_url[100] = "https://hooks.slack.com/services/blah/blah/blah";
+char twilio_sid[50] = "your_twilio_sid_here";
+char twilio_auth_token[100] = "your_twilio_auth_token_here";
+char twilio_to_number[20] = "+15555555555";
+char twilio_from_number[20] = "+15555555555";
 char delay_between_queries_ms[10] = "30000";
 
 camera_fb_t *frame = NULL;
-bool actionSaveConfig = false;
-bool resetParameters = false;
+bool actionSaveConfig = true;
+bool resetParameters = true;
 
 float targetConfidence = atof(groundlight_det_confidence);
 int failures_before_restart = 5;
+
+Twilio *twilio;
 
 void check_excessive_failures()
 {
@@ -153,6 +160,10 @@ bool loadParams()
         strcpy(groundlight_take_action_on, json["action_on"]);
         strcpy(groundlight_action_channel, json["action"]);
         strcpy(slack_url, json["slack_url"]);
+        strcpy(twilio_sid, json["twilio_sid"]);
+        strcpy(twilio_auth_token, json["twilio_auth_token"]);
+        strcpy(twilio_to_number, json["twilio_to_number"]);
+        strcpy(twilio_from_number, json["twilio_from_number"]);
         strcpy(delay_between_queries_ms, json["delay_between_queries_ms"]);
       }
       else
@@ -323,6 +334,10 @@ void setup()
   WiFiManagerParameter custom_groundlight_take_action_on("action_trigger", "take action on (YES/NO/UNSURE)", groundlight_take_action_on, 6);
   WiFiManagerParameter custom_groundlight_action("action", "channel for action", groundlight_action_channel, 10);
   WiFiManagerParameter custom_slack_url("slack_url", "slack url", slack_url, 100);
+  WiFiManagerParameter custom_twilio_sid("twilio_sid", "twilio sid", twilio_sid, 50);
+  WiFiManagerParameter custom_twilio_auth_token("twilio_auth_token", "twilio auth token", twilio_auth_token, 100);
+  WiFiManagerParameter custom_twilio_to_number("twilio_to_number", "twilio to number", twilio_to_number, 20);
+  WiFiManagerParameter custom_twilio_from_number("twilio_from_number", "twilio from number", twilio_from_number, 20);
   WiFiManagerParameter custom_delay_between_queries_ms("delay_between_queries_ms", "delay between queries (ms)", delay_between_queries_ms, 10);
 
   WiFiManager wm;
@@ -336,6 +351,10 @@ void setup()
   wm.addParameter(&custom_groundlight_take_action_on);
   wm.addParameter(&custom_groundlight_action);
   wm.addParameter(&custom_slack_url);
+  wm.addParameter(&custom_twilio_sid);
+  wm.addParameter(&custom_twilio_auth_token);
+  wm.addParameter(&custom_twilio_to_number);
+  wm.addParameter(&custom_twilio_from_number);
   wm.addParameter(&custom_delay_between_queries_ms);
 
   if (resetParameters)
@@ -367,6 +386,10 @@ void setup()
     strcpy(groundlight_take_action_on, custom_groundlight_take_action_on.getValue());
     strcpy(groundlight_action_channel, custom_groundlight_action.getValue());
     strcpy(slack_url, custom_slack_url.getValue());
+    strcpy(twilio_sid, custom_twilio_sid.getValue());
+    strcpy(twilio_auth_token, custom_twilio_auth_token.getValue());
+    strcpy(twilio_to_number, custom_twilio_to_number.getValue());
+    strcpy(twilio_from_number, custom_twilio_from_number.getValue());
     strcpy(delay_between_queries_ms, custom_delay_between_queries_ms.getValue());
     saveParams();
   }
@@ -388,6 +411,8 @@ void setup()
     ESP.restart();
     delay(2000);
   }
+
+  twilio = new Twilio(twilio_sid, twilio_auth_token);
 }
 
 String queryResults = "NONE_YET";
@@ -444,6 +469,7 @@ void loop()
       {
         Serial.println("updating status notification");
         post_slack_update("whatever we were waiting for just happened!");
+        post_twilio_update("whatever we were waiting for just happened!");
         prevAnswer = answer;
       }
     }
@@ -456,6 +482,7 @@ void loop()
       else
       {
         post_slack_update("waiting for the thing to happen again!");
+        post_twilio_update("waiting for the thing to happen again!");
       }
       prevAnswer = answer;
     }
@@ -578,6 +605,17 @@ bool post_slack_update(const char message[])
   }
 
   return true;
+}
+
+bool post_twilio_update(const char message[])
+{
+  String response;
+  bool success = twilio->send_message(twilio_to_number, twilio_from_number, message, response);
+  if (success) {
+    Serial.println("Sent twilio message successfully!");
+  } else {
+    Serial.println(response);
+  }
 }
 
 // Collects an HTTP response using an Arduino-compatible implementation

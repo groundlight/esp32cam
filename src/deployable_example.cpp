@@ -625,10 +625,14 @@ bool notifyStacklight(const char * label) {
       if (SSID == ((const StringSumHelper)"GL_STACKLIGHT_" + preferences.getString("sl_uuid", ""))) {
         // connect and move it to wifi network
         WiFi.begin(SSID, (const StringSumHelper)"gl_stacklight_password_" + preferences.getString("sl_uuid", ""));
-        delay(500);
+        // delay(5000);
+        for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
+          delay(500);
+        }
         if(WiFi.status() == WL_CONNECTED) {
           WiFiClient client;
           HTTPClient http;
+          http.setReuse(true);
           http.begin(client, stacklight_ap_ip);
           http.addHeader("Content-Type", "application/json");
           int httpResponseCode = http.POST((const StringSumHelper)"{\"ssid\":\"" + ssid + "\",\"password\":\"" + password + "\"}");
@@ -636,25 +640,31 @@ bool notifyStacklight(const char * label) {
           Serial.println(httpResponseCode);
           http.end();
 
-          delay(1000);
+          delay(5000);
           
           http.begin((StringSumHelper)stacklight_ap_ip + "/ip");
           httpResponseCode = http.GET();
           
-          if (httpResponseCode>0) {
+          if (httpResponseCode>0 && httpResponseCode == HTTP_CODE_OK) {
             Serial.print("HTTP Response code: ");
             Serial.println(httpResponseCode);
             String payload = http.getString();
-            Serial.println(payload);
-            preferences.putString("sl_ip", payload);
+            if (payload != "Not connected to WiFi") {
+              Serial.println(payload);
+              preferences.putString("sl_ip", payload);
+            }
           } else {
             Serial.print("Error code: ");
             Serial.println(httpResponseCode);
           }
           // Free resources
           http.end();
+
+          // delay(5000);
+          return true;
         } else {
           Serial.println("Couldn't connect to stacklight");
+          return false;
         }
       }
     }
@@ -681,6 +691,22 @@ bool notifyStacklight(const char * label) {
   } else {
     Serial.print("Error code: ");
     Serial.println(httpResponseCode);
+
+    // Check if stacklight is available as AP
+    WiFi.disconnect();
+    delay(100);
+    int n = WiFi.scanNetworks();
+    for (int i = 0; i < n; i++) {
+      String SSID = WiFi.SSID(i);
+      Serial.print("SSID: ");
+      Serial.println(SSID);
+      if (SSID == ((const StringSumHelper)"GL_STACKLIGHT_" + preferences.getString("sl_uuid", ""))) {
+        // remove saved ip
+        preferences.remove("sl_ip");
+      }
+    }
+    WiFi.begin(ssid, password);
+    delay(500);
   }
   http.end();
   preferences.end();

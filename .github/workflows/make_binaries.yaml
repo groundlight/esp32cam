@@ -1,0 +1,37 @@
+name: PlatformIO CI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: ${{ runner.os }}-pio
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install PlatformIO Core
+        run: pip install --upgrade platformio
+
+      - name: Build PlatformIO Project
+        run: pio run
+
+      - name: Copy binaries to /firmware
+        run: bash copy_firmware.sh
+
+      - name: Create release and upload binary
+        run: |
+          gh release create v0.0.${{github.run_number}} firmware/*
+        env:
+          GITHUB_TOKEN: ${{ github.TOKEN }}
+        shell: bash

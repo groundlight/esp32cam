@@ -1,16 +1,51 @@
-# esp32cam-edgelight
-ESP32 Camera sample app for Groundlight API
+<p align="center">
+  <a href="https://nextjs-fastapi-starter.vercel.app/">
+    <img src="https://avatars.githubusercontent.com/u/118213576?s=200&v=4" height="96">
+    <h3 align="center">ESP32CAM Edgelight Client</h3>
+  </a>
+</p>
 
-The camera will take pictures on defined intervals, send to the Groundlight.ai API over wifi, and send a notification via Slack when the camera first answers "YES", and then as the state changes.
+<br/>
 
-On first boot the device will launch access point to set wifi credentials, detector, slack hook, etc.  Holding a button during reset or power-on will force an erase of the file system and reset this process.   Serial port is configured to 115200 baud for debug messages.  
+# What is the ESP32CAM Edgelight Client?
 
-Works well with M5Stack ESP32 Camera, ESP32CAM, and likely others but would need to verify and update the pinouts.  Some hardware devices are more reliable than others and the software makes regular attempts to reboot as necessary which often gets things going again.
+The ESP32CAM Edgelight Client is firmware for the ESP32 microcontroller that allows it to send image queries to the Groundlight AI classification service.
 
-To build and deploy, install the Arduino IDE 2.0, ESP32 board package, and upload to target board.  These instructions are excellent.  https://randomnerdtutorials.com/installing-the-esp32-board-in-arduino-ide-mac-and-linux-instructions/
+# How to deploy
 
-You will also need to install the WifiManager (https://github.com/tzapu/WiFiManager) and ArduinoJson (https://github.com/bblanchon/ArduinoJson) libraries
+## From the Website
 
-Note that API key is stored in plaintext in the file system on the ESP32.  Please generate a dedicated key for your device if possible. 
+This tool is designed to make it as easy as possible to deploy your Groundlight detector on an ESP32 Camera Board. You can deploy your detector in just a few clicks.
 
-Currently only supports slack web hooks for notification, but easily extensible to other options, https://api.slack.com/messaging/webhooks
+1. Go to https://code.groundlight.ai/groundlight-embedded-uploader/.
+2. Plug your ESP32 Camera Board into your computer with a USB cable.
+3. Click through the steps to upload your detector to your ESP32 Camera Board.
+
+### Enabling Notifications
+
+If you want to receive notifications from your Edgelight deployed detector, you can enable and configure your notification sources from the website.
+
+Notification sources include:
+- Email
+- Slack
+- Twilio SMS
+
+### Stacklight Visual Feedback
+
+You can pair your ESP32 Camera Board with a Stacklight to receive visual feedback when your detector is triggered. To do this, you will need to have a Stacklight.
+
+To pair your ESP32 Camera Board with a Stacklight, follow these steps:
+
+1. Go to https://code.groundlight.ai/groundlight-embedded-uploader/.
+2. Plug your ESP32 Camera Board into your computer with a USB cable.
+3. Flash your ESP32 Camera Board with the Edgelight firmware if you haven't already.
+4. On the second step of the deployment process, click the checkbox to enable Stacklight feedback and enter the six digit code on your Stacklight into the text box.
+5. Click through the rest of the steps to deploy your detector.
+
+## Building from source
+
+1. Clone this repository
+2. Install the [PlatformIO IDE](https://platformio.org/platformio-ide) for VSCode
+3. Open the project in VSCode with PlatformIO
+4. Plug in your ESP32 with USB to your computer
+5. Build and upload the project to your ESP32

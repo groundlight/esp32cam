@@ -92,15 +92,16 @@ void deep_sleep() {
   esp_deep_sleep_start();
 }
 
-void setup()
-{
+void setup() {
 
 #if defined(GPIO_LED_FLASH)
   pinMode(GPIO_LED_FLASH, OUTPUT);
   digitalWrite(GPIO_LED_FLASH, LOW);
 #endif
-
-  // Serial.begin(115200);
+#ifdef LED_BUILTIN
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
+#endif
   Serial.begin(9600);
   Serial.println("Edgelight waking up...");
   if (RESET_SETTINGS_GPIO != -1) {
@@ -223,10 +224,12 @@ void setup()
   Serial.printf("using detector : %s\n", groundlight_det_id);
 
   delay(2000);
+#ifdef LED_BUILTIN
+  digitalWrite(LED_BUILTIN, LOW);
+#endif
 }
 
-void loop()
-{
+void loop() {
   while (Serial.available() > 0 && new_data == false) {
     // input += Serial.readString();
     input2[input2_index] = Serial.read();
@@ -369,24 +372,29 @@ void loop()
   Serial.println("Query Results:");
   Serial.println(queryResults);
   Serial.println();
-  deserializeJson(resultDoc, queryResults);
-  if (shouldDoNotification(queryResults)) {
-    Serial.println("Sending notification...");
-    sendNotifications(last_label, frame);
-  }
-  resultDoc.clear();
-  preferences.begin("config");
-  if (preferences.isKey("sl_uuid")) {
-    if (!notifyStacklight(last_label)) {
-      Serial.println("Failed to notify stacklight");
+  ArduinoJson::DeserializationError error = deserializeJson(resultDoc, queryResults);
+  if (error == ArduinoJson::DeserializationError::Ok) {
+    if (shouldDoNotification(queryResults)) {
+      Serial.println("Sending notification...");
+      sendNotifications(last_label, frame);
     }
-  }
-  preferences.end();
-  if (WiFi.SSID() != ssid) {
-    WiFi.disconnect();
-    delay(500);
-    WiFi.begin(ssid, password);
-    delay(500);
+    resultDoc.clear();
+    preferences.begin("config");
+    if (preferences.isKey("sl_uuid")) {
+      if (!notifyStacklight(last_label)) {
+        Serial.println("Failed to notify stacklight");
+      }
+    }
+    preferences.end();
+    if (WiFi.SSID() != ssid) {
+      WiFi.disconnect();
+      delay(500);
+      WiFi.begin(ssid, password);
+      delay(500);
+    }
+  } else {
+    Serial.println("Failed to parse query results");
+    Serial.println(error.c_str());
   }
 
   esp_camera_fb_return(frame);

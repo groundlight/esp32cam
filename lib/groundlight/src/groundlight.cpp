@@ -364,27 +364,40 @@ String get_detectors(const char *endpoint, const char *apiToken) {
   #define DET_DOC_SIZE 16384
 #endif
 
-float get_query_confidence(const String &jsonResults)
-{
+float get_query_confidence(const String &jsonResults) {
   DynamicJsonDocument results(1024);
-  auto deserializeError = deserializeJson(results, jsonResults);
+  ArduinoJson::DeserializationError deserializeError = deserializeJson(results, jsonResults);
+  if (deserializeError != ArduinoJson::DeserializationError::Ok) {
+    Serial.println("Failed to parse JSON");
+    return 0.0;
+  }
+  if (!results.containsKey("result") || !results["result"].containsKey("confidence")) {
+    Serial.println("No result found in JSON");
+    return 0.0;
+  }
   float confidence = results["result"]["confidence"] | 0.0;
 
   return (confidence == 0.0) ? 99.999 : confidence;
 }
 
-String get_query_id(const String &jsonResults)
-{
+String get_query_id(const String &jsonResults) {
   DynamicJsonDocument results(1024);
-  auto deserializeError = deserializeJson(results, jsonResults);
+  ArduinoJson::DeserializationError deserializeError = deserializeJson(results, jsonResults);
+  if (deserializeError != ArduinoJson::DeserializationError::Ok) {
+    Serial.println("Failed to parse JSON");
+    return "NONE";
+  }
+  if (!results.containsKey("id")) {
+    Serial.println("No query ID found in JSON");
+    return "NONE";
+  }
   return results["id"];
 }
 
 StaticJsonDocument<DET_DOC_SIZE> groundlight_json_doc;
 
 // Parses the detectors from the Groundlight API.
-detector_list get_detector_list(const char *endpoint, const char *apiToken)
-{
+detector_list get_detector_list(const char *endpoint, const char *apiToken) {
   deserializeJson(groundlight_json_doc, get_detectors(endpoint, apiToken));
   JsonArray detectors = groundlight_json_doc["results"];
   detector *_detector_list = new detector[detectors.size()];
@@ -402,8 +415,7 @@ detector_list get_detector_list(const char *endpoint, const char *apiToken)
   return res;
 }
 
-String detector_to_string(detector d)
-{
+String detector_to_string(detector d) {
   String res = "Detector: ";
   res += d.id;
   res += "\n\tName: ";

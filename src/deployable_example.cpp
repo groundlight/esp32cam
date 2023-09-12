@@ -508,6 +508,11 @@ bool try_save_config(char * input) {
       Serial.println("Found stacklight!");
       delay(100);
       preferences.putString("sl_uuid", (const char *)doc["additional_config"]["stacklight"]["uuid"]);
+      if (doc["additional_config"]["stacklight"].containsKey("switchColors")) {
+        preferences.putBool("sl_switch", doc["additional_config"]["stacklight"]["switchColors"]);
+      } else {
+        preferences.remove("sl_switch");
+      }
     } else {
       preferences.remove("sl_uuid");
     }
@@ -643,7 +648,7 @@ bool notifyStacklight(const char * label) {
     return false;
   }
 
-  if (preferences.isKey("sl_ip") && Stacklight::pushLabelToStacklight(preferences.getString("sl_ip", "").c_str(), label)) {
+  if (preferences.isKey("sl_ip") && Stacklight::pushLabelToStacklight(preferences.getString("sl_ip", "").c_str(), label, preferences.getBool("sl_switch", false))) {
     preferences.end();
     return true;
   }
@@ -668,25 +673,7 @@ bool notifyStacklight(const char * label) {
     Serial.println("Couldn't find stacklight");
     return false;
   }
-  // }
 
-  // if (!preferences.isKey("sl_ip")) {
-  //   preferences.end();
-  //   return false;
-  // }
-
-  // if (!pushLabelToStacklight(preferences.getString("sl_ip", "").c_str(), label)) {
-  //   // Check if stacklight is available as AP
-  //   if (isStacklightAPAvailable(preferences.getString("sl_uuid", ""))) {
-  //     // remove saved ip
-  //     Serial.println("Resetting Saved Stacklight IP Address");
-  //     preferences.remove("sl_ip");
-
-  //     // reconnect to network
-  //     WiFi.begin(ssid, password);
-  //     delay(500);
-  //   }
-  // }
   bool isKey = preferences.isKey("sl_ip");
   preferences.end();
   return isKey;

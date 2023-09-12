@@ -22,13 +22,18 @@ namespace Stacklight
         return false;
     }
 
-    bool pushLabelToStacklight(const char *ip, const char *label) {
+    bool pushLabelToStacklight(const char *ip, const char *label, bool switchColors = false) {
         Serial.println("Pushing label to Stacklight!");
         WiFiClient client;
         HTTPClient http;
         http.begin(client, (StringSumHelper) "http://" + ip + ":8080/display");
         http.addHeader("Content-Type", "text/plain");
-        int httpResponseCode = http.POST((String)label);
+        String labelStr = (String)label;
+        labelStr.toUpperCase();
+        if (switchColors) {
+            labelStr = labelStr == "PASS" || labelStr == "YES" ? "FAIL" : "PASS";
+        }
+        int httpResponseCode = http.POST(labelStr);
         // http.addHeader("Content-Type", "application/json");
         // int httpResponseCode = http.POST((const StringSumHelper)"{\"label\":\"" + label + "\"}");
         bool success = false;

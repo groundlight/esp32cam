@@ -74,6 +74,27 @@ int input2_index = 0;
 bool new_data = false;
 
 StaticJsonDocument<1024> resultDoc;
+StaticJsonDocument<1024> synthesisDoc;
+
+void listener(void * parameter);
+void buttonListener(void * parameter) {
+#ifdef LED_BUILTIN
+  pinMode(LED_BUILTIN, OUTPUT);
+#endif
+  while (true) {
+    if (digitalRead(RESET_SETTINGS_GPIO) != RESET_SETTINGS_GPIO_DEFAULT) {
+      should_deep_sleep = false;
+      // Serial.println("Button pressed!");
+#ifdef LED_BUILTIN
+      digitalWrite(LED_BUILTIN, HIGH);
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      digitalWrite(LED_BUILTIN, LOW);
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+#endif
+    }
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
+}
 
 // bool try_save_config(String input);
 bool try_save_config(char * input);
@@ -84,65 +105,64 @@ void try_answer_query(String input) {
     Serial.println((StringSumHelper)"{\"name\":\"" + (String) NAME + "\",\"type\":\"Camera\",\"version\":\"0.1.0\"}");
 #endif
   } else if (input.indexOf("config") != -1) {
-    resultDoc.clear();
     preferences.begin("config");
-    resultDoc["ssid"] = preferences.getString("ssid");
-    resultDoc["password"] = preferences.getString("password");
-    resultDoc["api_key"] = preferences.getString("api_key");
-    resultDoc["det_id"] = preferences.getString("det_id");
-    resultDoc["cycle_time"] = preferences.getInt("query_delay", query_delay);
+    synthesisDoc["ssid"] = preferences.getString("ssid");
+    synthesisDoc["password"] = preferences.getString("password");
+    synthesisDoc["api_key"] = preferences.getString("api_key");
+    synthesisDoc["det_id"] = preferences.getString("det_id");
+    synthesisDoc["cycle_time"] = preferences.getInt("query_delay", query_delay);
     if (preferences.isKey("det_name")) {
-      resultDoc["det_name"] = preferences.getString("det_name", "None");
+      synthesisDoc["det_name"] = preferences.getString("det_name", "None");
     }
     if (preferences.isKey("det_query")) {
-      resultDoc["det_query"] = preferences.getString("det_query", "None");
+      synthesisDoc["det_query"] = preferences.getString("det_query", "None");
     }
 
     if (preferences.isKey("endpoint")) {
-      resultDoc["additional_config"]["endpoint"] = preferences.getString("endpoint", "api.groundlight.ai");
+      synthesisDoc["additional_config"]["endpoint"] = preferences.getString("endpoint", "api.groundlight.ai");
     }
     if (preferences.isKey("tConf")) {
-      resultDoc["targetConfidence"] = preferences.getFloat("tConf", targetConfidence);
+      synthesisDoc["targetConfidence"] = preferences.getFloat("tConf", targetConfidence);
     }
     if (preferences.isKey("waitTime")) {
-      resultDoc["waitTime"] = preferences.getInt("waitTime", retryLimit);
+      synthesisDoc["waitTime"] = preferences.getInt("waitTime", retryLimit);
     }
     if (preferences.isKey("notiOptns")) {
-      resultDoc["additional_config"]["notificationOptions"] = preferences.getString("notiOptns", "None");
+      synthesisDoc["additional_config"]["notificationOptions"] = preferences.getString("notiOptns", "None");
     }
     if (preferences.isKey("slackKey") && preferences.isKey("slackEndpoint")) {
-      resultDoc["additional_config"]["slack"]["slackKey"] = preferences.getString("slackKey", "None");
-      resultDoc["additional_config"]["slack"]["slackEndpoint"] = preferences.getString("slackEndpoint", "None");
+      synthesisDoc["additional_config"]["slack"]["slackKey"] = preferences.getString("slackKey", "None");
+      synthesisDoc["additional_config"]["slack"]["slackEndpoint"] = preferences.getString("slackEndpoint", "None");
     }
     if (preferences.isKey("twilioSID") && preferences.isKey("twilioKey") && preferences.isKey("twilioNumber") && preferences.isKey("twilioEndpoint")) {
-      resultDoc["additional_config"]["twilio"]["twilioSID"] = preferences.getString("twilioSID", "None");
-      resultDoc["additional_config"]["twilio"]["twilioKey"] = preferences.getString("twilioKey", "None");
-      resultDoc["additional_config"]["twilio"]["twilioNumber"] = preferences.getString("twilioNumber", "None");
-      resultDoc["additional_config"]["twilio"]["twilioEndpoint"] = preferences.getString("twilioEndpoint", "None");
+      synthesisDoc["additional_config"]["twilio"]["twilioSID"] = preferences.getString("twilioSID", "None");
+      synthesisDoc["additional_config"]["twilio"]["twilioKey"] = preferences.getString("twilioKey", "None");
+      synthesisDoc["additional_config"]["twilio"]["twilioNumber"] = preferences.getString("twilioNumber", "None");
+      synthesisDoc["additional_config"]["twilio"]["twilioEndpoint"] = preferences.getString("twilioEndpoint", "None");
     }
     if (preferences.isKey("emailKey") && preferences.isKey("email") && preferences.isKey("emailEndpoint")) {
-      resultDoc["additional_config"]["email"]["emailKey"] = preferences.getString("emailKey", "None");
-      resultDoc["additional_config"]["email"]["emailEndpoint"] = preferences.getString("emailEndpoint", "None");
-      resultDoc["additional_config"]["email"]["email"] = preferences.getString("email", "None");
-      resultDoc["additional_config"]["email"]["emailHost"] = preferences.getString("emailHost", "None");
+      synthesisDoc["additional_config"]["email"]["emailKey"] = preferences.getString("emailKey", "None");
+      synthesisDoc["additional_config"]["email"]["emailEndpoint"] = preferences.getString("emailEndpoint", "None");
+      synthesisDoc["additional_config"]["email"]["email"] = preferences.getString("email", "None");
+      synthesisDoc["additional_config"]["email"]["emailHost"] = preferences.getString("emailHost", "None");
     }
     if (preferences.isKey("sl_uuid")) {
-      resultDoc["additional_config"]["stacklight"]["uuid"] = preferences.getString("sl_uuid", "None");
+      synthesisDoc["additional_config"]["stacklight"]["uuid"] = preferences.getString("sl_uuid", "None");
       if (preferences.isKey("sl_switch")) {
-        resultDoc["additional_config"]["stacklight"]["switchColors"] = preferences.getBool("sl_switch", false);
+        synthesisDoc["additional_config"]["stacklight"]["switchColors"] = preferences.getBool("sl_switch", false);
       }
     }
     if (preferences.isKey("wkhrs")) {
-      resultDoc["additional_config"]["working_hours"] = preferences.getString("wkhrs", "None");
+      synthesisDoc["additional_config"]["working_hours"] = preferences.getString("wkhrs", "None");
     }
     if (preferences.isKey("motion")) {
-      resultDoc["additional_config"]["motion_detection"] = preferences.getBool("motion", false);
+      synthesisDoc["additional_config"]["motion_detection"] = preferences.getBool("motion", false);
     }
     Serial.println("Device Config:");
-    serializeJson(resultDoc, Serial);
+    serializeJson(synthesisDoc, Serial);
     Serial.println();
     preferences.end();
-    resultDoc.clear();
+    synthesisDoc.clear();
   }
 }
 void printInfo();
@@ -153,9 +173,9 @@ bool decodeWorkingHoursString(String working_hours);
 void deep_sleep() {
   int time_elapsed = millis() - last_upload_time;
   int time_to_sleep = (query_delay - 10) * 1000000 - (1000 * time_elapsed);
-  // Serial.println((StringSumHelper)"Going to sleep for " + String(time_to_sleep) + " microseconds");
+  // // Serial.println((StringSumHelper)"Going to sleep for " + String(time_to_sleep) + " microseconds");
   esp_sleep_enable_timer_wakeup(time_to_sleep);
-  // esp_sleep_enable_uart_wakeup(0);
+  esp_sleep_enable_uart_wakeup(0);
   // esp_sleep_config_gpio_isolate();
   esp_deep_sleep_start();
 }
@@ -173,6 +193,14 @@ void setup() {
   // Serial.begin(9600);
   Serial.begin(115200);
   Serial.println("Edgelight waking up...");
+  xTaskCreate(
+    listener,    // Function that should be called
+    "Uart Listener",   // Name of the task (for debugging)
+    5000,            // Stack size (bytes)
+    NULL,            // Parameter to pass
+    1,               // Task priority
+    NULL             // Task handle
+  );
   if (RESET_SETTINGS_GPIO != -1) {
     if (RESET_SETTINGS_GPIO_DEFAULT == LOW) {
       pinMode(RESET_SETTINGS_GPIO, INPUT_PULLDOWN);
@@ -184,8 +212,18 @@ void setup() {
       preferences.clear();
       preferences.end();
       delay(500);
-      Serial.println("Reset settings!");
+      // Serial.println("Reset settings!");
     }
+    xTaskCreate(
+      buttonListener,    // Function that should be called
+      "Button Listener",   // Name of the task (for debugging)
+      1000,            // Stack size (bytes)
+      NULL,            // Parameter to pass
+      1,               // Task priority
+      NULL             // Task handle
+    );
+    gpio_wakeup_enable((gpio_num_t)RESET_SETTINGS_GPIO, GPIO_INTR_LOW_LEVEL);
+    esp_sleep_enable_gpio_wakeup();
   }
 
   preferences.begin("config", false);
@@ -202,12 +240,13 @@ void setup() {
     wifi_connected = true;
   }
   if (preferences.isKey("ssid") && preferences.isKey("sl_uuid") && !preferences.isKey("sl_ip")) {
-    Serial.println("Initializing Stacklight through AP");
+    // Serial.println("Initializing Stacklight through AP");
     if (Stacklight::isStacklightAPAvailable(preferences.getString("sl_uuid", ""))) {
       String SSID = ((const StringSumHelper)"GL_STACKLIGHT_" + preferences.getString("sl_uuid", ""));
       WiFi.begin(SSID, (const StringSumHelper)"gl_stacklight_password_" + preferences.getString("sl_uuid", ""));
       for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
-        delay(500);
+        // delay(500);
+        vTaskDelay(500 / portTICK_PERIOD_MS);
       }
       if(WiFi.isConnected()) {
         // String res = Stacklight::tryConnectToStacklight(ssid, password);
@@ -216,11 +255,11 @@ void setup() {
           preferences.putString("sl_ip", res);
         }
       } else {
-        Serial.println("Couldn't connect to stacklight");
+        // Serial.println("Couldn't connect to stacklight");
       }
       WiFi.disconnect();
     } else {
-      Serial.println("Couldn't find stacklight");
+      // Serial.println("Couldn't find stacklight");
     }
 
     WiFi.begin(ssid, password);
@@ -242,7 +281,7 @@ void setup() {
   }
   preferences.end();
 
-  Serial.println("Configuring Camera...");
+  // Serial.println("Configuring Camera...");
 
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -274,7 +313,7 @@ void setup() {
   // if (config.frame_size == FRAMESIZE_UXGA) {
   //   last_frame_buffer = (int *)malloc(1600*1200*3);
   // } else {
-  //   Serial.println("Camera frame size is not UXGA. Motion detection will not work.");
+  //   // Serial.println("Camera frame size is not UXGA. Motion detection will not work.");
   // }
 
   // Testing how to get the latest image
@@ -283,52 +322,64 @@ void setup() {
   esp_err_t error_code = esp_camera_init(&config);
   if (error_code != ESP_OK)
   {
-    Serial.printf("Camera init failed with error 0x%x", error_code);
-    Serial.println("Restarting system!");
-    delay(3000);
+    // Serial.printf("Camera init failed with error 0x%x", error_code);
+    // Serial.println("Restarting system!");
+    // delay(3000);
     ESP.restart(); // some boards are less reliable for initialization and will everntually just start working
     return;
   }
 
-  Serial.printf("using detector : %s\n", groundlight_det_id);
+  // Serial.printf("using detector : %s\n", groundlight_det_id);
 
-  delay(2000);
+  // delay(2000);
 #ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, LOW);
 #endif
 }
 
-void loop() {
-  while (Serial.available() > 0 && new_data == false) {
-    // input += Serial.readString();
-    input2[input2_index] = Serial.read();
-    if (input2[input2_index] == '\n') {
-      input2[input2_index] = '\0';
-      new_data = true;
+// void loop() {
+void listener(void * parameter) {
+  char input3[1000];
+  int input3_index = 0;
+  bool new_data_ = false;
+  while (true) {
+    while (Serial.available() > 0 && new_data_ == false) {
+      // input += Serial.readString();
+      input3[input3_index] = Serial.read();
+      if (input3[input3_index] == '\n') {
+        input3[input3_index] = '\0';
+        new_data_ = true;
+      }
+      input3_index++;
+      // return;
+      break;
     }
-    input2_index++;
-    return;
-  }
-  
-  if (new_data) {
-    // Serial.println("New data");
-    if (((String) input2).indexOf("query") != -1 && ((String) input2).indexOf("ssid") == -1) {
-      try_answer_query(input2);
-    } else if(try_save_config(input2)) {
-      Serial.println("Saved config!");
-      WiFi.begin(ssid, password);
-      wifi_connected = true;
+    
+    if (new_data_) {
+      // Serial.println("New data");
+      vTaskDelay(100 / portTICK_PERIOD_MS);
+      if (((String) input3).indexOf("query") != -1 && ((String) input3).indexOf("ssid") == -1) {
+        try_answer_query(input3);
+      } else if(try_save_config(input3)) {
+        // Serial.println("Saved config!");
+        WiFi.begin(ssid, password);
+        wifi_connected = true;
+      }
+      input = "";
+      input3_index = 0;
+      new_data_ = false;
     }
-    input = "";
-    input2_index = 0;
-    new_data = false;
+    vTaskDelay(10 / portTICK_PERIOD_MS);
   }
+}
 
+void loop () {
   if (!wifi_connected) {
     if (millis() > last_print_time + 1000) {
-      Serial.println("Waiting for Credentials...");
+      // Serial.println("Waiting for Credentials...");
       last_print_time = millis();
     }
+    vTaskDelay(100 / portTICK_PERIOD_MS);
     return;
   } else if (millis() > last_print_time + 1000) {
     last_print_time = millis();
@@ -339,9 +390,10 @@ void loop() {
     int time = millis();
     // make sure we don't startup in less than 10 seconds
     if (time < 10000) {
-      delay(10000 - time);
+      // delay(10000 - time);
+      vTaskDelay((10000 - time) / portTICK_PERIOD_MS);
     } else {
-      Serial.println("Took too long to startup!");
+      // Serial.println("Took too long to startup!");
     }
   }
 
@@ -350,7 +402,7 @@ void loop() {
     return;
   } else {
     last_upload_time = millis();
-    Serial.println("Taking a lap!");
+    // Serial.println("Taking a lap!");
   }
 
   preferences.begin("config", true);
@@ -358,7 +410,7 @@ void loop() {
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)){
-      Serial.println("Failed to obtain time");
+      // Serial.println("Failed to obtain time");
     } else {
       int hour = timeinfo.tm_hour;
       int minute = timeinfo.tm_min;
@@ -369,7 +421,7 @@ void loop() {
         in_working_hours = hour >= start_hr || hour < end_hr;
       }
       if (!in_working_hours) {
-        Serial.println("Not in working hours!");
+        // Serial.println("Not in working hours!");
         last_upload_time = millis();
         preferences.end();
         if (should_deep_sleep) {
@@ -384,7 +436,8 @@ void loop() {
   // get image from camera into a buffer
   #if defined(GPIO_LED_FLASH)
     digitalWrite(GPIO_LED_FLASH, HIGH);
-    delay(1000);
+    // delay(1000);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   #endif
 
   frame = esp_camera_fb_get();
@@ -398,88 +451,93 @@ void loop() {
 
   if (!frame)
   {
-    Serial.println("Camera capture failed! Restarting system!");
+    // Serial.println("Camera capture failed! Restarting system!");
     delay(3000);
     ESP.restart(); // maybe this will fix things? hard to say. its not going to be worse
   }
 
-  Serial.printf("Captured image. Encoded size is %d bytes\n", frame->len);
+  // Serial.printf("Captured image. Encoded size is %d bytes\n", frame->len);
 
   preferences.begin("config");
   if (preferences.isKey("motion") && preferences.getBool("motion")) {
-    Serial.println("Checking for motion...");
-    Serial.println("Buffer size" + frame->len);
+    // Serial.println("Checking for motion...");
+    // Serial.println("Buffer size" + frame->len);
   }
   preferences.end();
 
   // wait for wifi connection
   if (!WiFi.isConnected()) {
-    Serial.println("Waiting for wifi connection...");
+    // Serial.println("Waiting for wifi connection...");
     for (int i = 0; i < 100 && !WiFi.isConnected(); i++) {
-      delay(100);
+      // delay(100);
+      vTaskDelay(100 / portTICK_PERIOD_MS);
     }
   }
 
   queryResults = submit_image_query(frame, groundlight_endpoint, groundlight_det_id, groundlight_API_key);
   String queryId = get_query_id(queryResults);
 
-  Serial.println("Query ID:");
-  Serial.println(queryId);
-  Serial.println("Confidence:");
-  Serial.println(get_query_confidence(queryResults));
-  Serial.println();
+  // Serial.println("Query ID:");
+  // Serial.println(queryId);
+  // Serial.println("Confidence:");
+  // Serial.println(get_query_confidence(queryResults));
+  // Serial.println();
 
   // wait for confident answer
   int currTime = millis();
   while (get_query_confidence(queryResults) < targetConfidence)
   {
-    Serial.println("Waiting for confident answer...");
-    delay(1000);
+    // Serial.println("Waiting for confident answer...");
+    // delay(1000);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     queryResults = get_image_query(groundlight_endpoint, queryId.c_str(), groundlight_API_key);
 
     if (millis() > currTime + retryLimit * 1000) {
-      Serial.println("Retry limit reached!");
+      // Serial.println("Retry limit reached!");
       break;
     }
   }
 
-  Serial.println();
-  Serial.println("Query Results:");
-  Serial.println(queryResults);
-  Serial.println();
+  // Serial.println();
+  // Serial.println("Query Results:");
+  // Serial.println(queryResults);
+  // Serial.println();
   ArduinoJson::DeserializationError error = deserializeJson(resultDoc, queryResults);
   if (error == ArduinoJson::DeserializationError::Ok) {
     if (shouldDoNotification(queryResults)) {
-      Serial.println("Sending notification...");
+      // Serial.println("Sending notification...");
       sendNotifications(last_label, frame);
     }
     resultDoc.clear();
     preferences.begin("config");
     if (preferences.isKey("sl_uuid")) {
       if (!notifyStacklight(last_label)) {
-        Serial.println("Failed to notify stacklight");
+        // Serial.println("Failed to notify stacklight");
       }
     }
     preferences.end();
     if (WiFi.SSID() != ssid) {
       WiFi.disconnect();
-      delay(500);
+      // delay(500);
+      vTaskDelay(500 / portTICK_PERIOD_MS);
       WiFi.begin(ssid, password);
-      delay(500);
+      // delay(500);
+      vTaskDelay(500 / portTICK_PERIOD_MS);
     }
   } else {
-    Serial.println("Failed to parse query results");
-    Serial.println(error.c_str());
+    // Serial.println("Failed to parse query results");
+    // Serial.println(error.c_str());
   }
 
   esp_camera_fb_return(frame);
 
   if (should_deep_sleep) {
-    delay(500);
+    // delay(500);
+    vTaskDelay(500 / portTICK_PERIOD_MS);
     deep_sleep();
   }
 
-  Serial.printf("waiting %ds between queries...", query_delay);
+  // Serial.printf("waiting %ds between queries...", query_delay);
 }
 
 StaticJsonDocument<4096> doc;
@@ -489,13 +547,13 @@ bool try_save_config(char * input) {
   ArduinoJson::DeserializationError err = deserializeJson(doc, input);
 
   if (err.code() != ArduinoJson::DeserializationError::Ok) {
-    Serial.println("Failed to parse input as JSON");
-    Serial.println(err.c_str());
+    // Serial.println("Failed to parse input as JSON");
+    // Serial.println(err.c_str());
     return false;
   }
 
   if (!doc.containsKey("ssid") || !doc.containsKey("password") || !doc.containsKey("api_key") || !doc.containsKey("det_id") || !doc.containsKey("cycle_time")) {
-    Serial.println("Missing required fields");
+    // Serial.println("Missing required fields");
     return false;
   }
 
@@ -530,15 +588,18 @@ bool try_save_config(char * input) {
     preferences.remove("waitTime");
   }
   detector det = get_detector_by_id(groundlight_endpoint, (const char *)doc["det_id"], (const char *)doc["api_key"]);
-  delay(1000);
+  // delay(1000);
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
   Serial.println("doc Info:");
   serializeJson(doc, Serial);
-  delay(1000);
+  // delay(1000);
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
   preferences.putString("det_name", det.name);
   preferences.putString("det_query", det.query);
   if (doc.containsKey("additional_config")) {
-    Serial.println("Found additional config!");
-    delay(100);
+    // Serial.println("Found additional config!");
+    // delay(100);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
     if (doc["additional_config"].containsKey("endpoint") && doc["additional_config"]["endpoint"] != "") {
       preferences.putString("endpoint", (const char *)doc["additional_config"]["endpoint"]);
       strcpy(groundlight_endpoint, (const char *)doc["additional_config"]["endpoint"]);
@@ -546,21 +607,24 @@ bool try_save_config(char * input) {
       preferences.remove("endpoint");
     }
     if (doc["additional_config"].containsKey("notificationOptions") && doc["additional_config"]["notificationOptions"] != "None") {
-      Serial.println("Found notification options!");
-      delay(100);
+      // Serial.println("Found notification options!");
+      // delay(100);
+      vTaskDelay(100 / portTICK_PERIOD_MS);
       preferences.putString("notiOptns", (const char *)doc["additional_config"]["notificationOptions"]);  
       if (doc["additional_config"].containsKey("slack") && doc["additional_config"]["slack"].containsKey("slackKey")) {
-        Serial.println("Found slack!");
-        delay(100);
+        // Serial.println("Found slack!");
+        // delay(100);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
         preferences.putString("slackKey", (const char *)doc["additional_config"]["slack"]["slackKey"]);
         preferences.putString("slackEndpoint", (const char *)doc["additional_config"]["slack"]["slackEndpoint"]);
       } else {
         preferences.remove("slackKey");
       }
-      // Serial.print
+      // // Serial.print
       if (doc["additional_config"].containsKey("twilio") && doc["additional_config"]["twilio"].containsKey("twilioKey")) {
-        Serial.println("Found twilio!");
-        delay(100);
+        // Serial.println("Found twilio!");
+        // delay(100);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
         preferences.putString("twilioSID", (const char *)doc["additional_config"]["twilio"]["twilioSID"]);
         preferences.putString("twilioKey", (const char *)doc["additional_config"]["twilio"]["twilioKey"]);
         preferences.putString("twilioNumber", (const char *)doc["additional_config"]["twilio"]["twilioNumber"]);
@@ -569,8 +633,9 @@ bool try_save_config(char * input) {
         preferences.remove("twilioKey");
       }
       if (doc["additional_config"].containsKey("email") && doc["additional_config"]["email"].containsKey("emailKey")) {
-        Serial.println("Found email!");
-        delay(100);
+        // Serial.println("Found email!");
+        // delay(100);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
         preferences.putString("emailKey", (const char *)doc["additional_config"]["email"]["emailKey"]);
         preferences.putString("emailEndpoint", (const char *)doc["additional_config"]["email"]["emailEndpoint"]);
         preferences.putString("email", (const char *)doc["additional_config"]["email"]["email"]);
@@ -580,8 +645,9 @@ bool try_save_config(char * input) {
       }
     }
     if (doc["additional_config"].containsKey("stacklight") && doc["additional_config"]["stacklight"].containsKey("uuid")) {
-      Serial.println("Found stacklight!");
-      delay(100);
+      // Serial.println("Found stacklight!");
+      // delay(100);
+      vTaskDelay(100 / portTICK_PERIOD_MS);
       preferences.putString("sl_uuid", (const char *)doc["additional_config"]["stacklight"]["uuid"]);
       if (doc["additional_config"]["stacklight"].containsKey("switchColors")) {
         preferences.putBool("sl_switch", doc["additional_config"]["stacklight"]["switchColors"]);
@@ -592,15 +658,17 @@ bool try_save_config(char * input) {
       preferences.remove("sl_uuid");
     }
     if (doc["additional_config"].containsKey("working_hours")) {
-      Serial.println("Has working hours!");
-      delay(100);
+      // Serial.println("Has working hours!");
+      // delay(100);
+      vTaskDelay(100 / portTICK_PERIOD_MS);
       preferences.putString("wkhrs", (const char *)doc["additional_config"]["working_hours"]);
     } else {
       preferences.remove("wkhrs");
     }
     if (doc["additional_config"].containsKey("motion_detection")) {
-      Serial.println("Has motion detection!");
-      delay(100);
+      // Serial.println("Has motion detection!");
+      // delay(100);
+      vTaskDelay(100 / portTICK_PERIOD_MS);
       preferences.putBool("motion", true);
     } else {
       preferences.remove("motion");
@@ -623,34 +691,34 @@ bool try_save_config(char * input) {
 
 void printInfo() {
   preferences.begin("config", true);
-  Serial.print("NotiOptns: ");
-  Serial.println(preferences.getString("notiOptns", "None"));
-  Serial.print("Endpoint: ");
-  Serial.println(preferences.getString("endpoint", "api.groundlight.ai"));
-  Serial.print("Det Name: ");
-  Serial.println(preferences.getString("det_name", "None"));
-  Serial.print("Det Query: ");
-  Serial.println(preferences.getString("det_query", "None"));
-  Serial.print("Slack Key: ");
-  Serial.println(preferences.getString("slackKey", "None"));
-  Serial.print("Slack Endpoint: ");
-  Serial.println(preferences.getString("slackEndpoint", "None"));
-  Serial.print("Twilio SID: ");
-  Serial.println(preferences.getString("twilioSID", "None"));
-  Serial.print("Twilio Key: ");
-  Serial.println(preferences.getString("twilioKey", "None"));
-  Serial.print("Twilio Number: ");
-  Serial.println(preferences.getString("twilioNumber", "None"));
-  Serial.print("Twilio Endpoint: ");
-  Serial.println(preferences.getString("twilioEndpoint", "None"));
-  Serial.print("Email Key: ");
-  Serial.println(preferences.getString("emailKey", "None"));
-  Serial.print("Email Endpoint: ");
-  Serial.println(preferences.getString("emailEndpoint", "None"));
-  Serial.print("Email: ");
-  Serial.println(preferences.getString("email", "None"));
-  Serial.print("Email Host: ");
-  Serial.println(preferences.getString("emailHost", "None"));
+  // Serial.print("NotiOptns: ");
+  // Serial.println(preferences.getString("notiOptns", "None"));
+  // Serial.print("Endpoint: ");
+  // Serial.println(preferences.getString("endpoint", "api.groundlight.ai"));
+  // Serial.print("Det Name: ");
+  // Serial.println(preferences.getString("det_name", "None"));
+  // Serial.print("Det Query: ");
+  // Serial.println(preferences.getString("det_query", "None"));
+  // Serial.print("Slack Key: ");
+  // Serial.println(preferences.getString("slackKey", "None"));
+  // Serial.print("Slack Endpoint: ");
+  // Serial.println(preferences.getString("slackEndpoint", "None"));
+  // Serial.print("Twilio SID: ");
+  // Serial.println(preferences.getString("twilioSID", "None"));
+  // Serial.print("Twilio Key: ");
+  // Serial.println(preferences.getString("twilioKey", "None"));
+  // Serial.print("Twilio Number: ");
+  // Serial.println(preferences.getString("twilioNumber", "None"));
+  // Serial.print("Twilio Endpoint: ");
+  // Serial.println(preferences.getString("twilioEndpoint", "None"));
+  // Serial.print("Email Key: ");
+  // Serial.println(preferences.getString("emailKey", "None"));
+  // Serial.print("Email Endpoint: ");
+  // Serial.println(preferences.getString("emailEndpoint", "None"));
+  // Serial.print("Email: ");
+  // Serial.println(preferences.getString("email", "None"));
+  // Serial.print("Email Host: ");
+  // Serial.println(preferences.getString("emailHost", "None"));
   preferences.end();
 }
 
@@ -692,13 +760,13 @@ void sendNotifications(char *label, camera_fb_t *fb) {
     preferences.putString("det_query", det_query);
   }
   if (preferences.isKey("slackKey") && preferences.isKey("slackEndpoint")) {
-    Serial.println("Sending Slack notification...");
+    // Serial.println("Sending Slack notification...");
     String slackKey = preferences.getString("slackKey", "");
     String slackEndpoint = preferences.getString("slackEndpoint", "");
     sendSlackNotification(det_name, det_query, slackKey, slackEndpoint, label, fb);
   }
   if (preferences.isKey("twilioKey") && preferences.isKey("twilioNumber") && preferences.isKey("twilioEndpoint")) {
-    Serial.println("Sending Twilio notification...");
+    // Serial.println("Sending Twilio notification...");
     String twilioSID = preferences.getString("twilioSID", "");
     String twilioKey = preferences.getString("twilioKey", "");
     String twilioNumber = preferences.getString("twilioNumber", "");
@@ -706,7 +774,7 @@ void sendNotifications(char *label, camera_fb_t *fb) {
     sendTwilioNotification(det_name, det_query, twilioSID, twilioKey, twilioNumber, twilioEndpoint, label, fb);
   }
   if (preferences.isKey("emailKey") && preferences.isKey("email") && preferences.isKey("emailEndpoint")) {
-    Serial.println("Sending Email notification...");
+    // Serial.println("Sending Email notification...");
     String emailKey = preferences.getString("emailKey", "");
     String email = preferences.getString("email", "");
     String emailEndpoint = preferences.getString("emailEndpoint", "");
@@ -728,12 +796,13 @@ bool notifyStacklight(const char * label) {
     return true;
   }
 
-  Serial.println("Connecting to Stacklight AP");
+  // Serial.println("Connecting to Stacklight AP");
   if (Stacklight::isStacklightAPAvailable(preferences.getString("sl_uuid", ""))) {
     String SSID = ((const StringSumHelper)"GL_STACKLIGHT_" + preferences.getString("sl_uuid", ""));
     WiFi.begin(SSID, (const StringSumHelper)"gl_stacklight_password_" + preferences.getString("sl_uuid", ""));
     for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
-      delay(500);
+      // delay(500);
+      vTaskDelay(500 / portTICK_PERIOD_MS);
     }
     if(WiFi.isConnected()) {
       String res = Stacklight::tryConnectToStacklight(ssid, password);
@@ -741,11 +810,11 @@ bool notifyStacklight(const char * label) {
         preferences.putString("sl_ip", res);
       }
     } else {
-      Serial.println("Couldn't connect to stacklight");
+      // Serial.println("Couldn't connect to stacklight");
       return false;
     }
   } else {
-    Serial.println("Couldn't find stacklight");
+    // Serial.println("Couldn't find stacklight");
     return false;
   }
 

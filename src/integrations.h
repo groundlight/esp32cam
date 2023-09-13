@@ -34,8 +34,8 @@ SMTPSession smtp;
 Twilio *twilio;
 
 void sendSlackNotification(String detectorName, String query, String key, String endpoint, String label, camera_fb_t *fb) {
-    // Serial.print("Posting message to Slack: ");
-    // Serial.println(message);
+    // // Serial.print("Posting message to Slack: ");
+    // // Serial.println(message);
 
     // Create a JSON object for the Slack message.
     DynamicJsonDocument slackData(1024);
@@ -51,7 +51,7 @@ void sendSlackNotification(String detectorName, String query, String key, String
     fields["short"] = "false";
 
     serializeJson(slackData, Serial);
-    Serial.printf("\n(done!)\n");
+    // Serial.printf("\n(done!)\n");
 
     // Initialize WiFiClientSecure and HTTPClient.
     WiFiClientSecure *client = new WiFiClientSecure;
@@ -62,19 +62,19 @@ void sendSlackNotification(String detectorName, String query, String key, String
         client->setInsecure();
         https.setTimeout(10000);
 
-        Serial.print("[HTTPS] Preparing to post to Slack at ");
-        Serial.println(endpoint);
+        // Serial.print("[HTTPS] Preparing to post to Slack at ");
+        // Serial.println(endpoint);
 
         // Start HTTPS connection.
         if (https.begin(*client, endpoint))
         {
-        Serial.print("Attempting [HTTPS] POST...\n");
+        // Serial.print("Attempting [HTTPS] POST...\n");
 
         String requestBody;
         serializeJson(slackData, requestBody);
 
-        Serial.print("Request body is ");
-        Serial.println(requestBody);
+        // Serial.print("Request body is ");
+        // Serial.println(requestBody);
 
         // Add necessary headers for the POST request.
         https.addHeader("Content-Type", "application/json");
@@ -85,27 +85,27 @@ void sendSlackNotification(String detectorName, String query, String key, String
 
         if (httpsResponseCode > 0)
         {
-            Serial.printf("[HTTPS] POST... code: %d\n", httpsResponseCode);
+            // Serial.printf("[HTTPS] POST... code: %d\n", httpsResponseCode);
         }
         else
         {
-            Serial.printf("[HTTPS] POST... failed, error: %d %s\n", httpsResponseCode, https.errorToString(httpsResponseCode).c_str());
-            Serial.println("(It probably still posted to Slack!)");
+            // Serial.printf("[HTTPS] POST... failed, error: %d %s\n", httpsResponseCode, https.errorToString(httpsResponseCode).c_str());
+            // Serial.println("(It probably still posted to Slack!)");
         }
 
         https.end();
         }
         else
         {
-        Serial.print("Unable to connect to ");
-        Serial.println(endpoint);
+        // Serial.print("Unable to connect to ");
+        // Serial.println(endpoint);
         }
 
         delete client;
     }
     else
     {
-        Serial.println("Unable to create client for HTTPS");
+        // Serial.println("Unable to create client for HTTPS");
     }
 }
 
@@ -117,9 +117,9 @@ void sendTwilioNotification(String detectorName, String query, String sid, Strin
     String response;
     bool success = twilio->send_message(endpoint, number, message, response);
     if (success) {
-        Serial.println("Sent message successfully!");
+        // Serial.println("Sent message successfully!");
     } else {
-        Serial.println(response);
+        // Serial.println(response);
   }
 }
 
@@ -257,10 +257,10 @@ void sendEmailNotification(String detectorName, String query, String key, String
         return;
     }
 
-    if (smtp.isAuthenticated())
-        Serial.println("\nSuccessfully logged in.");
-    else
-        Serial.println("\nConnected with no Auth.");
+    // if (smtp.isAuthenticated())
+        // Serial.println("\nSuccessfully logged in.");
+    // else
+        // Serial.println("\nConnected with no Auth.");
 
     /* Start sending the Email and close the session */
     if (!MailClient.sendMail(&smtp, &message, true))

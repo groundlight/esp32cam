@@ -101,11 +101,11 @@ void setup()
 #endif
 
   Serial.begin(115200);
-  Serial.println("Edgelight waking up...");
+  // Serial.println("Edgelight waking up...");
 
   WiFi.begin(ssid, password);
 
-  Serial.println("Configuring Camera...");
+  // Serial.println("Configuring Camera...");
 
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -137,14 +137,14 @@ void setup()
   esp_err_t error_code = esp_camera_init(&config);
   if (error_code != ESP_OK)
   {
-    Serial.printf("Camera init failed with error 0x%x", error_code);
-    Serial.println("Restarting system!");
+    // Serial.printf("Camera init failed with error 0x%x", error_code);
+    // Serial.println("Restarting system!");
     delay(3000);
     ESP.restart(); // some boards are less reliable for initialization and will everntually just start working
     return;
   }
 
-  Serial.printf("using detector : %s\n", groundlight_det_id);
+  // Serial.printf("using detector : %s\n", groundlight_det_id);
 
   delay(2000);
 }
@@ -165,21 +165,21 @@ void loop()
 
   if (!frame)
   {
-    Serial.println("Camera capture failed! Restarting system!");
+    // Serial.println("Camera capture failed! Restarting system!");
     delay(3000);
     ESP.restart(); // maybe this will fix things? hard to say. its not going to be worse
   }
 
-  Serial.printf("Captured image. Encoded size is %d bytes\n", frame->len);
+  // Serial.printf("Captured image. Encoded size is %d bytes\n", frame->len);
 
   queryResults = submit_image_query(frame, groundlight_endpoint, groundlight_det_id, groundlight_API_key);
-  Serial.println("Query Results:");
-  Serial.println(queryResults);
-  Serial.println();
+  // Serial.println("Query Results:");
+  // Serial.println(queryResults);
+  // Serial.println();
 
   esp_camera_fb_return(frame);
 
-  Serial.printf("waiting %dms between queries...", query_delay);
+  // Serial.printf("waiting %dms between queries...", query_delay);
   delay(query_delay);
-  Serial.println("taking another lap!");
+  // Serial.println("taking another lap!");
 }

@@ -42,21 +42,21 @@ char password[40] = "we-build-robo-brains";
 void setup()
 {
   Serial.begin(115200);
-  // Serial.println("Waking up...");
+  Serial.println("Waking up...");
 
   WiFi.begin(ssid, password);
 
   delay(1000);
   String res = get_detectors(groundlight_endpoint, groundlight_API_key);
-  // Serial.println(res);
+  Serial.println(res);
 
 #ifdef HAS_JSON_LIB
-  // Serial.println("\nDetectors:");
+  Serial.println("\nDetectors:");
   detector_list detectors = get_detector_list(groundlight_endpoint, groundlight_API_key);
   for (int i = 0; i < detectors.size; i++)
   {
-    // Serial.print("\t");
-    // Serial.println(detectors.detectors[i].name);
+    Serial.print("\t");
+    Serial.println(detectors.detectors[i].name);
   }
 #endif
 }

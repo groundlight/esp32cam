@@ -33,7 +33,7 @@ SMTPSession smtp;
 
 Twilio *twilio;
 
-void sendSlackNotification(String detectorName, String query, String key, String endpoint, String label, camera_fb_t *fb) {
+bool sendSlackNotification(String detectorName, String query, String key, String endpoint, String label, camera_fb_t *fb) {
     // // Serial.print("Posting message to Slack: ");
     // // Serial.println(message);
 
@@ -99,6 +99,8 @@ void sendSlackNotification(String detectorName, String query, String key, String
         {
         // Serial.print("Unable to connect to ");
         // Serial.println(endpoint);
+            delete client;
+            return false;
         }
 
         delete client;
@@ -106,10 +108,12 @@ void sendSlackNotification(String detectorName, String query, String key, String
     else
     {
         // Serial.println("Unable to create client for HTTPS");
+        return false;
     }
+    return true;
 }
 
-void sendTwilioNotification(String detectorName, String query, String sid, String key, String number, String endpoint, String label, camera_fb_t *fb) {
+bool sendTwilioNotification(String detectorName, String query, String sid, String key, String number, String endpoint, String label, camera_fb_t *fb) {
     twilio = new Twilio(sid.c_str(), key.c_str());
 
     char message[150];
@@ -119,8 +123,10 @@ void sendTwilioNotification(String detectorName, String query, String sid, Strin
     if (success) {
         // Serial.println("Sent message successfully!");
     } else {
+        return false;
         // Serial.println(response);
-  }
+    }
+    return true;
 }
 
 Session_Config emailSetup(String host, uint16_t port, String email, String key) {
@@ -175,7 +181,7 @@ Session_Config emailSetup(String host, uint16_t port, String email, String key) 
     return config;
 }
 
-void sendEmailNotification(String detectorName, String query, String key, String email, String endpoint, String host, String label, camera_fb_t *fb) {
+bool sendEmailNotification(String detectorName, String query, String key, String email, String endpoint, String host, String label, camera_fb_t *fb) {
     Session_Config config = emailSetup(host, esp_mail_smtp_port_587, email, key);
 
     /* Declare the message class */
@@ -253,8 +259,8 @@ void sendEmailNotification(String detectorName, String query, String key, String
     /* Connect to the server */
     if (!smtp.connect(&config))
     {
-        ESP_MAIL_PRINTF("Connection error, Status Code: %d, Error Code: %d, Reason: %s", smtp.statusCode(), smtp.errorCode(), smtp.errorReason().c_str());
-        return;
+        // ESP_MAIL_PRINTF("Connection error, Status Code: %d, Error Code: %d, Reason: %s", smtp.statusCode(), smtp.errorCode(), smtp.errorReason().c_str());
+        return false;
     }
 
     // if (smtp.isAuthenticated())
@@ -263,11 +269,15 @@ void sendEmailNotification(String detectorName, String query, String key, String
         // Serial.println("\nConnected with no Auth.");
 
     /* Start sending the Email and close the session */
-    if (!MailClient.sendMail(&smtp, &message, true))
-        ESP_MAIL_PRINTF("Error, Status Code: %d, Error Code: %d, Reason: %s", smtp.statusCode(), smtp.errorCode(), smtp.errorReason().c_str());
+    if (!MailClient.sendMail(&smtp, &message, true)) {
+        // ESP_MAIL_PRINTF("Error, Status Code: %d, Error Code: %d, Reason: %s", smtp.statusCode(), smtp.errorCode(), smtp.errorReason().c_str());
+        return false;
+    }
 
     // to clear sending result log
     // smtp.sendingResult.clear();
 
-    ESP_MAIL_PRINTF("Free Heap: %d\n", MailClient.getFreeHeap());
+    // ESP_MAIL_PRINTF("Free Heap: %d\n", MailClient.getFreeHeap());
+
+    return true;
 }

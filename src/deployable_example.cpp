@@ -44,6 +44,76 @@ SOFTWARE.
   #define RESET_SETTINGS_GPIO_DEFAULT HIGH
 #endif
 
+enum QueryState {
+  WAITING_TO_QUERY,
+  DNS_NOT_FOUND,
+  SSL_CONNECTION_FAILURE,
+  LAST_RESPONSE_PASS,
+  LAST_RESPONSE_FAIL,
+  LAST_RESPONSE_UNSURE,
+};
+
+String queryStateToString (QueryState state) {
+  switch (state) {
+    case WAITING_TO_QUERY:
+      return "WAITING_TO_QUERY";
+    case SSL_CONNECTION_FAILURE:
+      return "CONNECTION_FAILURE";
+    case DNS_NOT_FOUND:
+      return "DNS_NOT_FOUND";
+    case LAST_RESPONSE_PASS:
+      return "LAST_RESPONSE_PASS";
+    case LAST_RESPONSE_FAIL:
+      return "LAST_RESPONSE_FAIL";
+    case LAST_RESPONSE_UNSURE:
+      return "LAST_RESPONSE_UNSURE";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+enum NotificationState {
+  NOTIFICATION_NOT_ATTEMPTED,
+  NOTIFICATIONS_SENT,
+  NOTIFICATION_ATTEMPT_FAILED,
+};
+
+String notificationStateToString (NotificationState state) {
+  switch (state) {
+    case NOTIFICATION_NOT_ATTEMPTED:
+      return "NOTIFICATION_NOT_ATTEMPTED";
+    case NOTIFICATIONS_SENT:
+      return "NOTIFICATIONS_SENT";
+    case NOTIFICATION_ATTEMPT_FAILED:
+      return "NOTIFICATION_ATTEMPT_FAILED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+enum StacklightState {
+  STACKLIGHT_NOT_FOUND,
+  STACKLIGHT_ONLINE,
+  STACKLIGHT_PAIRED,
+};
+
+String stacklightStateToString (StacklightState state) {
+  switch (state) {
+    case STACKLIGHT_NOT_FOUND:
+      return "STACKLIGHT_NOT_FOUND";
+    case STACKLIGHT_ONLINE:
+      return "STACKLIGHT_ONLINE";
+    case STACKLIGHT_PAIRED:
+      return "STACKLIGHT_PAIRED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+QueryState queryState = WAITING_TO_QUERY;
+NotificationState notificationState = NOTIFICATION_NOT_ATTEMPTED;
+StacklightState stacklightState = STACKLIGHT_NOT_FOUND;
+
 camera_fb_t *frame = NULL;
 int *last_frame_buffer = NULL;
 char groundlight_endpoint[60] = "api.groundlight.ai";
@@ -98,76 +168,11 @@ void buttonListener(void * parameter) {
 
 // bool try_save_config(String input);
 bool try_save_config(char * input);
-void try_answer_query(String input) {
-  if (input.indexOf("device_type") != -1) {
-#ifdef NAME
-    Serial.println("Device Info:");
-    Serial.println((StringSumHelper)"{\"name\":\"" + (String) NAME + "\",\"type\":\"Camera\",\"version\":\"0.1.0\"}");
-#endif
-  } else if (input.indexOf("config") != -1) {
-    preferences.begin("config");
-    synthesisDoc["ssid"] = preferences.getString("ssid");
-    synthesisDoc["password"] = preferences.getString("password");
-    synthesisDoc["api_key"] = preferences.getString("api_key");
-    synthesisDoc["det_id"] = preferences.getString("det_id");
-    synthesisDoc["cycle_time"] = preferences.getInt("query_delay", query_delay);
-    if (preferences.isKey("det_name")) {
-      synthesisDoc["det_name"] = preferences.getString("det_name", "None");
-    }
-    if (preferences.isKey("det_query")) {
-      synthesisDoc["det_query"] = preferences.getString("det_query", "None");
-    }
+void try_answer_query(String input);
 
-    if (preferences.isKey("endpoint")) {
-      synthesisDoc["additional_config"]["endpoint"] = preferences.getString("endpoint", "api.groundlight.ai");
-    }
-    if (preferences.isKey("tConf")) {
-      synthesisDoc["targetConfidence"] = preferences.getFloat("tConf", targetConfidence);
-    }
-    if (preferences.isKey("waitTime")) {
-      synthesisDoc["waitTime"] = preferences.getInt("waitTime", retryLimit);
-    }
-    if (preferences.isKey("notiOptns")) {
-      synthesisDoc["additional_config"]["notificationOptions"] = preferences.getString("notiOptns", "None");
-    }
-    if (preferences.isKey("slackKey") && preferences.isKey("slackEndpoint")) {
-      synthesisDoc["additional_config"]["slack"]["slackKey"] = preferences.getString("slackKey", "None");
-      synthesisDoc["additional_config"]["slack"]["slackEndpoint"] = preferences.getString("slackEndpoint", "None");
-    }
-    if (preferences.isKey("twilioSID") && preferences.isKey("twilioKey") && preferences.isKey("twilioNumber") && preferences.isKey("twilioEndpoint")) {
-      synthesisDoc["additional_config"]["twilio"]["twilioSID"] = preferences.getString("twilioSID", "None");
-      synthesisDoc["additional_config"]["twilio"]["twilioKey"] = preferences.getString("twilioKey", "None");
-      synthesisDoc["additional_config"]["twilio"]["twilioNumber"] = preferences.getString("twilioNumber", "None");
-      synthesisDoc["additional_config"]["twilio"]["twilioEndpoint"] = preferences.getString("twilioEndpoint", "None");
-    }
-    if (preferences.isKey("emailKey") && preferences.isKey("email") && preferences.isKey("emailEndpoint")) {
-      synthesisDoc["additional_config"]["email"]["emailKey"] = preferences.getString("emailKey", "None");
-      synthesisDoc["additional_config"]["email"]["emailEndpoint"] = preferences.getString("emailEndpoint", "None");
-      synthesisDoc["additional_config"]["email"]["email"] = preferences.getString("email", "None");
-      synthesisDoc["additional_config"]["email"]["emailHost"] = preferences.getString("emailHost", "None");
-    }
-    if (preferences.isKey("sl_uuid")) {
-      synthesisDoc["additional_config"]["stacklight"]["uuid"] = preferences.getString("sl_uuid", "None");
-      if (preferences.isKey("sl_switch")) {
-        synthesisDoc["additional_config"]["stacklight"]["switchColors"] = preferences.getBool("sl_switch", false);
-      }
-    }
-    if (preferences.isKey("wkhrs")) {
-      synthesisDoc["additional_config"]["working_hours"] = preferences.getString("wkhrs", "None");
-    }
-    if (preferences.isKey("motion")) {
-      synthesisDoc["additional_config"]["motion_detection"] = preferences.getBool("motion", false);
-    }
-    Serial.println("Device Config:");
-    serializeJson(synthesisDoc, Serial);
-    Serial.println();
-    preferences.end();
-    synthesisDoc.clear();
-  }
-}
 void printInfo();
 bool shouldDoNotification(String queryRes);
-void sendNotifications(char *label, camera_fb_t *fb);
+bool sendNotifications(char *label, camera_fb_t *fb);
 bool notifyStacklight(const char * label);
 bool decodeWorkingHoursString(String working_hours);
 void deep_sleep() {
@@ -253,6 +258,7 @@ void setup() {
         String res = Stacklight::initStacklight(ssid, password);
         if (res != "") {
           preferences.putString("sl_ip", res);
+          stacklightState = STACKLIGHT_PAIRED;
         }
       } else {
         // Serial.println("Couldn't connect to stacklight");
@@ -281,8 +287,6 @@ void setup() {
   }
   preferences.end();
 
-  // Serial.println("Configuring Camera...");
-
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -310,21 +314,10 @@ void setup() {
   config.jpeg_quality = 10;           // lower means higher quality
   config.fb_count = 1;
 
-  // if (config.frame_size == FRAMESIZE_UXGA) {
-  //   last_frame_buffer = (int *)malloc(1600*1200*3);
-  // } else {
-  //   // Serial.println("Camera frame size is not UXGA. Motion detection will not work.");
-  // }
-
-  // Testing how to get the latest image
-  // config.grab_mode = CAMERA_GRAB_LATEST;
-
   esp_err_t error_code = esp_camera_init(&config);
   if (error_code != ESP_OK)
   {
-    // Serial.printf("Camera init failed with error 0x%x", error_code);
-    // Serial.println("Restarting system!");
-    // delay(3000);
+    delay(3000);
     ESP.restart(); // some boards are less reliable for initialization and will everntually just start working
     return;
   }
@@ -504,9 +497,39 @@ void loop () {
   // Serial.println();
   ArduinoJson::DeserializationError error = deserializeJson(resultDoc, queryResults);
   if (error == ArduinoJson::DeserializationError::Ok) {
+    if (resultDoc.containsKey("result")) {
+      if (resultDoc["result"].containsKey("label")) {
+        if (resultDoc["result"]["label"] == "QUERY_FAIL" && resultDoc["result"].containsKey("failure_reason")) {
+          if (resultDoc["result"]["failure_reason"] == "INITIAL_SSL_CONNECTION_FAILURE") {
+            // DNS NOT FOUND
+            queryState = DNS_NOT_FOUND;
+          } else if (resultDoc["result"]["failure_reason"] == "SSL_CONNECTION_FAILURE") {
+            // SSL CONNECTION FAILURE
+            queryState = SSL_CONNECTION_FAILURE;
+          } else if (resultDoc["result"]["failure_reason"] == "SSL_CONNECTION_FAILURE_COLLECTING_RESPONSE") {
+            // SSL CONNECTION FAILURE
+            queryState = SSL_CONNECTION_FAILURE;
+          }
+        } else if (resultDoc["result"]["label"] != "QUERY_FAIL") {
+          String label = resultDoc["result"]["label"];
+          label.toUpperCase();
+          if (label == "PASS" || label == "YES") {
+            queryState = LAST_RESPONSE_PASS;
+          } else if (label == "FAIL" || label == "NO") {
+            queryState = LAST_RESPONSE_FAIL;
+          } else if (label == "UNSURE" || label == "__UNSURE") {
+            queryState = LAST_RESPONSE_UNSURE;
+          }
+        }
+      }
+    }
     if (shouldDoNotification(queryResults)) {
       // Serial.println("Sending notification...");
-      sendNotifications(last_label, frame);
+      if (sendNotifications(last_label, frame)) {
+        notificationState = NOTIFICATIONS_SENT;
+      } else {
+        notificationState = NOTIFICATION_ATTEMPT_FAILED;
+      }
     }
     resultDoc.clear();
     preferences.begin("config");
@@ -689,39 +712,6 @@ bool try_save_config(char * input) {
   return true;
 }
 
-void printInfo() {
-  preferences.begin("config", true);
-  // Serial.print("NotiOptns: ");
-  // Serial.println(preferences.getString("notiOptns", "None"));
-  // Serial.print("Endpoint: ");
-  // Serial.println(preferences.getString("endpoint", "api.groundlight.ai"));
-  // Serial.print("Det Name: ");
-  // Serial.println(preferences.getString("det_name", "None"));
-  // Serial.print("Det Query: ");
-  // Serial.println(preferences.getString("det_query", "None"));
-  // Serial.print("Slack Key: ");
-  // Serial.println(preferences.getString("slackKey", "None"));
-  // Serial.print("Slack Endpoint: ");
-  // Serial.println(preferences.getString("slackEndpoint", "None"));
-  // Serial.print("Twilio SID: ");
-  // Serial.println(preferences.getString("twilioSID", "None"));
-  // Serial.print("Twilio Key: ");
-  // Serial.println(preferences.getString("twilioKey", "None"));
-  // Serial.print("Twilio Number: ");
-  // Serial.println(preferences.getString("twilioNumber", "None"));
-  // Serial.print("Twilio Endpoint: ");
-  // Serial.println(preferences.getString("twilioEndpoint", "None"));
-  // Serial.print("Email Key: ");
-  // Serial.println(preferences.getString("emailKey", "None"));
-  // Serial.print("Email Endpoint: ");
-  // Serial.println(preferences.getString("emailEndpoint", "None"));
-  // Serial.print("Email: ");
-  // Serial.println(preferences.getString("email", "None"));
-  // Serial.print("Email Host: ");
-  // Serial.println(preferences.getString("emailHost", "None"));
-  preferences.end();
-}
-
 bool shouldDoNotification(String queryRes) {
   bool res = false;
   preferences.begin("config", true);
@@ -748,10 +738,11 @@ bool shouldDoNotification(String queryRes) {
   return res;
 }
 
-void sendNotifications(char *label, camera_fb_t *fb) {
+bool sendNotifications(char *label, camera_fb_t *fb) {
   preferences.begin("config");
   String det_name = preferences.getString("det_name", "");
   String det_query = preferences.getString("det_query", "");
+  bool worked = true;
   if (det_name == "NONE") {
     detector det = get_detector_by_id(groundlight_endpoint, groundlight_det_id, groundlight_API_key);
     det_name = det.name;
@@ -763,7 +754,7 @@ void sendNotifications(char *label, camera_fb_t *fb) {
     // Serial.println("Sending Slack notification...");
     String slackKey = preferences.getString("slackKey", "");
     String slackEndpoint = preferences.getString("slackEndpoint", "");
-    sendSlackNotification(det_name, det_query, slackKey, slackEndpoint, label, fb);
+    worked = worked && sendSlackNotification(det_name, det_query, slackKey, slackEndpoint, label, fb);
   }
   if (preferences.isKey("twilioKey") && preferences.isKey("twilioNumber") && preferences.isKey("twilioEndpoint")) {
     // Serial.println("Sending Twilio notification...");
@@ -771,7 +762,7 @@ void sendNotifications(char *label, camera_fb_t *fb) {
     String twilioKey = preferences.getString("twilioKey", "");
     String twilioNumber = preferences.getString("twilioNumber", "");
     String twilioEndpoint = preferences.getString("twilioEndpoint", "");
-    sendTwilioNotification(det_name, det_query, twilioSID, twilioKey, twilioNumber, twilioEndpoint, label, fb);
+    worked = worked && sendTwilioNotification(det_name, det_query, twilioSID, twilioKey, twilioNumber, twilioEndpoint, label, fb);
   }
   if (preferences.isKey("emailKey") && preferences.isKey("email") && preferences.isKey("emailEndpoint")) {
     // Serial.println("Sending Email notification...");
@@ -779,9 +770,10 @@ void sendNotifications(char *label, camera_fb_t *fb) {
     String email = preferences.getString("email", "");
     String emailEndpoint = preferences.getString("emailEndpoint", "");
     String host = preferences.getString("emailHost", "");
-    sendEmailNotification(det_name, det_query, emailKey, email, emailEndpoint, host, label, fb);
+    worked = worked && sendEmailNotification(det_name, det_query, emailKey, email, emailEndpoint, host, label, fb);
   }
   preferences.end();
+  return worked;
 }
 
 bool notifyStacklight(const char * label) {
@@ -798,6 +790,7 @@ bool notifyStacklight(const char * label) {
 
   // Serial.println("Connecting to Stacklight AP");
   if (Stacklight::isStacklightAPAvailable(preferences.getString("sl_uuid", ""))) {
+    stacklightState = STACKLIGHT_ONLINE;
     String SSID = ((const StringSumHelper)"GL_STACKLIGHT_" + preferences.getString("sl_uuid", ""));
     WiFi.begin(SSID, (const StringSumHelper)"gl_stacklight_password_" + preferences.getString("sl_uuid", ""));
     for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
@@ -808,6 +801,7 @@ bool notifyStacklight(const char * label) {
       String res = Stacklight::tryConnectToStacklight(ssid, password);
       if (res != "") {
         preferences.putString("sl_ip", res);
+        stacklightState = STACKLIGHT_PAIRED;
       }
     } else {
       // Serial.println("Couldn't connect to stacklight");
@@ -815,6 +809,7 @@ bool notifyStacklight(const char * label) {
     }
   } else {
     // Serial.println("Couldn't find stacklight");
+    stacklightState = STACKLIGHT_NOT_FOUND;
     return false;
   }
 
@@ -831,4 +826,88 @@ bool decodeWorkingHoursString(String working_hours) {
   start_hr = working_hours.substring(0, 2).toInt();
   end_hr = working_hours.substring(3, 5).toInt();
   return true;
+}
+
+void try_answer_query(String input) {
+  if (input.indexOf("device_type") != -1) {
+#ifdef NAME
+    Serial.println("Device Info:");
+    Serial.println((StringSumHelper)"{\"name\":\"" + (String) NAME + "\",\"type\":\"Camera\",\"version\":\"" + VERSION + "\"}");
+#endif
+  } else if (input.indexOf("config") != -1) {
+    preferences.begin("config");
+    synthesisDoc["ssid"] = preferences.getString("ssid");
+    synthesisDoc["password"] = preferences.getString("password");
+    synthesisDoc["api_key"] = preferences.getString("api_key");
+    synthesisDoc["det_id"] = preferences.getString("det_id");
+    synthesisDoc["cycle_time"] = preferences.getInt("query_delay", query_delay);
+    if (preferences.isKey("det_name")) {
+      synthesisDoc["det_name"] = preferences.getString("det_name", "None");
+    }
+    if (preferences.isKey("det_query")) {
+      synthesisDoc["det_query"] = preferences.getString("det_query", "None");
+    }
+
+    if (preferences.isKey("endpoint")) {
+      synthesisDoc["additional_config"]["endpoint"] = preferences.getString("endpoint", "api.groundlight.ai");
+    }
+    if (preferences.isKey("tConf")) {
+      synthesisDoc["targetConfidence"] = preferences.getFloat("tConf", targetConfidence);
+    }
+    if (preferences.isKey("waitTime")) {
+      synthesisDoc["waitTime"] = preferences.getInt("waitTime", retryLimit);
+    }
+    if (preferences.isKey("notiOptns")) {
+      synthesisDoc["additional_config"]["notificationOptions"] = preferences.getString("notiOptns", "None");
+    }
+    if (preferences.isKey("slackKey") && preferences.isKey("slackEndpoint")) {
+      synthesisDoc["additional_config"]["slack"]["slackKey"] = preferences.getString("slackKey", "None");
+      synthesisDoc["additional_config"]["slack"]["slackEndpoint"] = preferences.getString("slackEndpoint", "None");
+    }
+    if (preferences.isKey("twilioSID") && preferences.isKey("twilioKey") && preferences.isKey("twilioNumber") && preferences.isKey("twilioEndpoint")) {
+      synthesisDoc["additional_config"]["twilio"]["twilioSID"] = preferences.getString("twilioSID", "None");
+      synthesisDoc["additional_config"]["twilio"]["twilioKey"] = preferences.getString("twilioKey", "None");
+      synthesisDoc["additional_config"]["twilio"]["twilioNumber"] = preferences.getString("twilioNumber", "None");
+      synthesisDoc["additional_config"]["twilio"]["twilioEndpoint"] = preferences.getString("twilioEndpoint", "None");
+    }
+    if (preferences.isKey("emailKey") && preferences.isKey("email") && preferences.isKey("emailEndpoint")) {
+      synthesisDoc["additional_config"]["email"]["emailKey"] = preferences.getString("emailKey", "None");
+      synthesisDoc["additional_config"]["email"]["emailEndpoint"] = preferences.getString("emailEndpoint", "None");
+      synthesisDoc["additional_config"]["email"]["email"] = preferences.getString("email", "None");
+      synthesisDoc["additional_config"]["email"]["emailHost"] = preferences.getString("emailHost", "None");
+    }
+    if (preferences.isKey("sl_uuid")) {
+      synthesisDoc["additional_config"]["stacklight"]["uuid"] = preferences.getString("sl_uuid", "None");
+      if (preferences.isKey("sl_switch")) {
+        synthesisDoc["additional_config"]["stacklight"]["switchColors"] = preferences.getBool("sl_switch", false);
+      }
+    }
+    if (preferences.isKey("wkhrs")) {
+      synthesisDoc["additional_config"]["working_hours"] = preferences.getString("wkhrs", "None");
+    }
+    if (preferences.isKey("motion")) {
+      synthesisDoc["additional_config"]["motion_detection"] = preferences.getBool("motion", false);
+    }
+    Serial.println("Device Config:");
+    serializeJson(synthesisDoc, Serial);
+    Serial.println();
+    preferences.end();
+    synthesisDoc.clear();
+  } else if (input.indexOf("state") != -1) {
+    preferences.begin("config");
+    synthesisDoc["wifi_state"] = WiFi.isConnected() ? "Connected" : "Disconnected";
+    synthesisDoc["query_state"] = queryStateToString(queryState);
+    if (preferences.isKey("notiOptns") && preferences.getString("notiOptns", "None") != "None") {
+      synthesisDoc["notification_state"] = notificationStateToString(notificationState);
+    }
+    if (preferences.isKey("sl_uuid")) {
+      synthesisDoc["stacklight_state"] = stacklightStateToString(stacklightState);
+    }
+    synthesisDoc["query"] = queryResults;
+    preferences.end();
+    Serial.println("Device State:");
+    serializeJson(synthesisDoc, Serial);
+    Serial.println();
+    synthesisDoc.clear();
+  }
 }

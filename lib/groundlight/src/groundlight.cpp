@@ -2,10 +2,7 @@
 #include "Arduino.h"
 #include "WiFi.h"
 #include "WiFiClientSecure.h"
-// #include "WiFiClient.h"
 #include "HTTPClient.h"
-
-// HTTPClient http;
 
 // Collects an HTTP response using an Arduino-compatible implementation
 String collectHttpResponse(WiFiClient &client)
@@ -19,8 +16,6 @@ String collectHttpResponse(WiFiClient &client)
   // Keep reading until timeout or a valid response body is received
   while ((startTime + timeoutDuration) > millis())
   {
-    // Serial.print(".");
-    // delay(200);
     vTaskDelay(200 / portTICK_PERIOD_MS);
     while (client.available())
     {
@@ -54,10 +49,6 @@ String collectHttpResponse(WiFiClient &client)
     }
   }
 
-  // // Serial.println();
-
-  // // Serial.println("RESPONSE BODY : " + responseBody);
-
   return responseBody;
 }
 
@@ -80,11 +71,6 @@ String submit_image_query(camera_fb_t *image_bytes, char *endpoint, char *detect
     _endpoint = _endpoint.substring(0, _endpoint.indexOf(":"));
   }
 
-  // Serial.print(isHTTPS ? "Using HTTPS, endpoint: " : "Using HTTP, endpoint: ");
-  // Serial.print(_endpoint);
-  // Serial.print(", port: ");
-  // Serial.println(port);
-
   if (isHTTPS) {
     WiFiClientSecure client;
     client.setInsecure();
@@ -99,17 +85,8 @@ String submit_image_query_with_client(camera_fb_t *image_bytes, const char *endp
 {
   String responseBody;
 
-  // Serial.print("Heap size: ");
-  // Serial.println(esp_get_free_heap_size());
-
-  if (!client.connect(endpoint, port))
-  {
-    // Serial.println("SSL connection failure!");
-    return "{ \"result\" : { \"confidence\" : 0.0, \"label\" : \"QUERY_FAIL\" } }";
-  }
-  else
-  {
-    // Serial.println("SSL client connected");
+  if (!client.connect(endpoint, port)) {
+    return "{ \"result\": { \"confidence\": 0.0, \"label\": \"QUERY_FAIL\", \"failure_reason\": \"INITIAL_SSL_CONNECTION_FAILURE\" } }";
   }
   client.setTimeout(120);
 
@@ -131,7 +108,7 @@ String submit_image_query_with_client(camera_fb_t *image_bytes, const char *endp
   if (!client.connected())
   {
     // Serial.println("SSL appears to be dead. returning QUERY_FAIL");
-    return "{ \"result\" : { \"confidence\" : 0.0, \"label\" : \"QUERY_FAIL\" }";
+    return "{ \"result\" : { \"confidence\" : 0.0, \"label\" : \"QUERY_FAIL\", \"failure_reason\": \"SSL_CONNECTION_FAILURE\" }";
   }
 
   uint8_t *image = image_bytes->buf;
@@ -169,19 +146,12 @@ String submit_image_query_with_client(camera_fb_t *image_bytes, const char *endp
   else
   {
     // Serial.println("SSL appears to be dead. returning QUERY_FAIL");
-    return "{ \"result\" : { \"confidence\" : 0.0, \"label\" : \"QUERY_FAIL\" }";
+    return "{ \"result\": { \"confidence\": 0.0, \"label\": \"QUERY_FAIL\", \"failure_reason\": \"SSL_CONNECTION_FAILURE_COLLECTING_RESPONSE\" } }";
   }
 }
 #endif
 
-String get_image_query(char *endpoint, const char *query_id, char *api_token)
-{
-  /*
-    char url[128] = "https://";
-    strcat(url, endpoint);
-    strcat(url, "/device-api/v1/image-queries/");
-    strcat(url, query_id);
-  */
+String get_image_query(char *endpoint, const char *query_id, char *api_token) {
   String url = "https://" + String(endpoint) + "/device-api/v1/image-queries/" + String(query_id);
   String response = "NONE";
 
@@ -189,38 +159,35 @@ String get_image_query(char *endpoint, const char *query_id, char *api_token)
 
   // Serial.print("Checking for image query results...");
 
-  if (client)
-  {
+  if (client) {
+    
+    client->setInsecure();
+    HTTPClient https;
+    https.setTimeout(10000);
+
+    if (https.begin(*client, url))
     {
-      client->setInsecure();
-      HTTPClient https;
-      https.setTimeout(10000);
 
-      if (https.begin(*client, url))
+      https.addHeader("X-API-Token", api_token);
+      https.addHeader("Content-Type", "application/json");
+
+      int httpsResponseCode = https.GET();
+
+      if (httpsResponseCode > 0)
       {
-
-        https.addHeader("X-API-Token", api_token);
-        https.addHeader("Content-Type", "application/json");
-
-        int httpsResponseCode = https.GET();
-
-        if (httpsResponseCode > 0)
-        {
-          // Serial.printf("[HTTPS] response : %d\n", httpsResponseCode);
-          response = https.getString();
-          // Serial.println("response body : " + response);
-        }
-        else
-        {
-          // Serial.printf("[HTTPS] GET... failed, error: %d %s\n", httpsResponseCode, https.errorToString(httpsResponseCode).c_str());
-          // Serial.println("check the logs!");
-        }
-        https.end();
+        // Serial.printf("[HTTPS] response : %d\n", httpsResponseCode);
+        response = https.getString();
+        // Serial.println("response body : " + response);
       }
       else
       {
-        // Serial.print("Unable to connect to the Groundlight API");
+        // Serial.printf("[HTTPS] GET... failed, error: %d %s\n", httpsResponseCode, https.errorToString(httpsResponseCode).c_str());
+        // Serial.println("check the logs!");
       }
+      https.end();
+    }
+    else {
+      // Serial.print("Unable to connect to the Groundlight API");
     }
 
     delete client;

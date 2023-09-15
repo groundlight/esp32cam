@@ -31,7 +31,7 @@ SMTPSession smtp;
 
 Twilio *twilio;
 
-enum SlackNotificationResult {
+enum class SlackNotificationResult {
     SUCCESS,
     POST_FAILURE_BUT_POSSIBLE_SUCCESS,
     CONNECTION_FAILURE,
@@ -99,12 +99,12 @@ SlackNotificationResult sendSlackNotification(String detectorName, String query,
     }
     else {
         // Serial.println("Unable to create client for HTTPS");
-        return CLIENT_FAILURE;
+        return SlackNotificationResult::CLIENT_FAILURE;
     }
     return SlackNotificationResult::SUCCESS;
 }
 
-enum TwilioNotificationResult {
+enum class TwilioNotificationResult {
     SUCCESS,
     FAILURE,
 };
@@ -171,7 +171,7 @@ Session_Config emailSetup(String host, uint16_t port, String email, String key) 
     return config;
 }
 
-enum EmailNotificationResult {
+enum class EmailNotificationResult {
     SUCCESS,
     CONNECTION_FAILURE,
     SENDING_FAILURE,

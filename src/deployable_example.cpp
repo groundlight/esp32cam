@@ -180,7 +180,7 @@ void deep_sleep() {
   int time_to_sleep = (query_delay - 10) * 1000000 - (1000 * time_elapsed);
   // // Serial.println((StringSumHelper)"Going to sleep for " + String(time_to_sleep) + " microseconds");
   esp_sleep_enable_timer_wakeup(time_to_sleep);
-  esp_sleep_enable_uart_wakeup(0);
+  // esp_sleep_enable_uart_wakeup(0);
   // esp_sleep_config_gpio_isolate();
   esp_deep_sleep_start();
 }
@@ -201,7 +201,7 @@ void setup() {
   xTaskCreate(
     listener,    // Function that should be called
     "Uart Listener",   // Name of the task (for debugging)
-    5000,            // Stack size (bytes)
+    10000,            // Stack size (bytes)
     NULL,            // Parameter to pass
     1,               // Task priority
     NULL             // Task handle
@@ -227,8 +227,8 @@ void setup() {
       1,               // Task priority
       NULL             // Task handle
     );
-    gpio_wakeup_enable((gpio_num_t)RESET_SETTINGS_GPIO, GPIO_INTR_LOW_LEVEL);
-    esp_sleep_enable_gpio_wakeup();
+    // gpio_wakeup_enable((gpio_num_t)RESET_SETTINGS_GPIO, RESET_SETTINGS_GPIO_DEFAULT == LOW ? GPIO_INTR_HIGH_LEVEL : GPIO_INTR_LOW_LEVEL);
+    // esp_sleep_enable_gpio_wakeup();
   }
 
   preferences.begin("config", false);
@@ -490,29 +490,26 @@ void loop () {
       break;
     }
   }
-
-  // Serial.println();
-  // Serial.println("Query Results:");
-  // Serial.println(queryResults);
-  // Serial.println();
   ArduinoJson::DeserializationError error = deserializeJson(resultDoc, queryResults);
   if (error == ArduinoJson::DeserializationError::Ok) {
     if (resultDoc.containsKey("result")) {
       if (resultDoc["result"].containsKey("label")) {
-        if (resultDoc["result"]["label"] == "QUERY_FAIL" && resultDoc["result"].containsKey("failure_reason")) {
-          if (resultDoc["result"]["failure_reason"] == "INITIAL_SSL_CONNECTION_FAILURE") {
+        String label = resultDoc["result"]["label"].as<String>();
+        label.toUpperCase();
+        if (label == "QUERY_FAIL" && resultDoc["result"].containsKey("failure_reason")) {
+          String reason = resultDoc["result"]["failure_reason"].as<String>();
+          reason.toUpperCase();
+          if (reason == "INITIAL_SSL_CONNECTION_FAILURE") {
             // DNS NOT FOUND
             queryState = DNS_NOT_FOUND;
-          } else if (resultDoc["result"]["failure_reason"] == "SSL_CONNECTION_FAILURE") {
+          } else if (reason == "SSL_CONNECTION_FAILURE") {
             // SSL CONNECTION FAILURE
             queryState = SSL_CONNECTION_FAILURE;
-          } else if (resultDoc["result"]["failure_reason"] == "SSL_CONNECTION_FAILURE_COLLECTING_RESPONSE") {
+          } else if (reason == "SSL_CONNECTION_FAILURE_COLLECTING_RESPONSE") {
             // SSL CONNECTION FAILURE
             queryState = SSL_CONNECTION_FAILURE;
           }
-        } else if (resultDoc["result"]["label"] != "QUERY_FAIL") {
-          String label = resultDoc["result"]["label"];
-          label.toUpperCase();
+        } else if (label != "QUERY_FAIL") {
           if (label == "PASS" || label == "YES") {
             queryState = LAST_RESPONSE_PASS;
           } else if (label == "FAIL" || label == "NO") {
@@ -521,23 +518,25 @@ void loop () {
             queryState = LAST_RESPONSE_UNSURE;
           }
         }
+        preferences.begin("config");
+        preferences.putInt("qSt", queryState);
+        preferences.end();
       }
     }
     if (shouldDoNotification(queryResults)) {
-      // Serial.println("Sending notification...");
       if (sendNotifications(last_label, frame)) {
         notificationState = NOTIFICATIONS_SENT;
       } else {
         notificationState = NOTIFICATION_ATTEMPT_FAILED;
       }
     }
-    resultDoc.clear();
     preferences.begin("config");
     if (preferences.isKey("sl_uuid")) {
       if (!notifyStacklight(last_label)) {
         // Serial.println("Failed to notify stacklight");
       }
     }
+    resultDoc.clear();
     preferences.end();
     if (WiFi.SSID() != ssid) {
       WiFi.disconnect();
@@ -598,31 +597,35 @@ bool try_save_config(char * input) {
   } else {
     preferences.remove("endpoint");
   }
-  if (doc.containsKey("tConf")) {
-    preferences.putFloat("tConf", doc["targetConfidence"]);
-    targetConfidence = doc["targetConfidence"];
-  } else {
-    preferences.remove("tConf");
-  }
   if (doc.containsKey("waitTime")) {
     preferences.putInt("waitTime", doc["waitTime"]);
     retryLimit = doc["waitTime"];
   } else {
     preferences.remove("waitTime");
   }
-  detector det = get_detector_by_id(groundlight_endpoint, (const char *)doc["det_id"], (const char *)doc["api_key"]);
-  // delay(1000);
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
-  Serial.println("doc Info:");
-  serializeJson(doc, Serial);
-  // delay(1000);
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
-  preferences.putString("det_name", det.name);
-  preferences.putString("det_query", det.query);
+  if (doc.containsKey("det_id") && doc.containsKey("api_key")) {
+    detector det = get_detector_by_id(groundlight_endpoint, (const char *)doc["det_id"], (const char *)doc["api_key"]);
+    preferences.putString("det_name", det.name);
+    preferences.putString("det_query", det.query);
+  }
+  // vTaskDelay(2000 / portTICK_PERIOD_MS);
+  // Serial.println();
   if (doc.containsKey("additional_config")) {
     // Serial.println("Found additional config!");
-    // delay(100);
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    // vTaskDelay(500 / portTICK_PERIOD_MS);
+    if (doc["additional_config"].containsKey("target_confidence")) {
+      // Serial.println("Found target confidence!");
+      // vTaskDelay(500 / portTICK_PERIOD_MS);
+      // preferences.putFloat("tConf", doc["additional_config"]["target_confidence"]);
+      String targetConfidenceString = (const char *)doc["additional_config"]["target_confidence"];
+      // Serial.println(targetConfidenceString);
+      // vTaskDelay(1000 / portTICK_PERIOD_MS);
+      targetConfidence = targetConfidenceString.toFloat();
+      preferences.putFloat("tConf", targetConfidence);
+      preferences.putString("tCStr", targetConfidenceString);
+    } else {
+      preferences.remove("tConf");
+    }
     if (doc["additional_config"].containsKey("endpoint") && doc["additional_config"]["endpoint"] != "") {
       preferences.putString("endpoint", (const char *)doc["additional_config"]["endpoint"]);
       strcpy(groundlight_endpoint, (const char *)doc["additional_config"]["endpoint"]);
@@ -632,12 +635,12 @@ bool try_save_config(char * input) {
     if (doc["additional_config"].containsKey("notificationOptions") && doc["additional_config"]["notificationOptions"] != "None") {
       // Serial.println("Found notification options!");
       // delay(100);
-      vTaskDelay(100 / portTICK_PERIOD_MS);
+      // vTaskDelay(100 / portTICK_PERIOD_MS);
       preferences.putString("notiOptns", (const char *)doc["additional_config"]["notificationOptions"]);  
       if (doc["additional_config"].containsKey("slack") && doc["additional_config"]["slack"].containsKey("slackKey")) {
         // Serial.println("Found slack!");
         // delay(100);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        // vTaskDelay(100 / portTICK_PERIOD_MS);
         preferences.putString("slackKey", (const char *)doc["additional_config"]["slack"]["slackKey"]);
         preferences.putString("slackEndpoint", (const char *)doc["additional_config"]["slack"]["slackEndpoint"]);
       } else {
@@ -647,7 +650,7 @@ bool try_save_config(char * input) {
       if (doc["additional_config"].containsKey("twilio") && doc["additional_config"]["twilio"].containsKey("twilioKey")) {
         // Serial.println("Found twilio!");
         // delay(100);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        // vTaskDelay(100 / portTICK_PERIOD_MS);
         preferences.putString("twilioSID", (const char *)doc["additional_config"]["twilio"]["twilioSID"]);
         preferences.putString("twilioKey", (const char *)doc["additional_config"]["twilio"]["twilioKey"]);
         preferences.putString("twilioNumber", (const char *)doc["additional_config"]["twilio"]["twilioNumber"]);
@@ -658,7 +661,7 @@ bool try_save_config(char * input) {
       if (doc["additional_config"].containsKey("email") && doc["additional_config"]["email"].containsKey("emailKey")) {
         // Serial.println("Found email!");
         // delay(100);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        // vTaskDelay(100 / portTICK_PERIOD_MS);
         preferences.putString("emailKey", (const char *)doc["additional_config"]["email"]["emailKey"]);
         preferences.putString("emailEndpoint", (const char *)doc["additional_config"]["email"]["emailEndpoint"]);
         preferences.putString("email", (const char *)doc["additional_config"]["email"]["email"]);
@@ -670,7 +673,7 @@ bool try_save_config(char * input) {
     if (doc["additional_config"].containsKey("stacklight") && doc["additional_config"]["stacklight"].containsKey("uuid")) {
       // Serial.println("Found stacklight!");
       // delay(100);
-      vTaskDelay(100 / portTICK_PERIOD_MS);
+      // vTaskDelay(100 / portTICK_PERIOD_MS);
       preferences.putString("sl_uuid", (const char *)doc["additional_config"]["stacklight"]["uuid"]);
       if (doc["additional_config"]["stacklight"].containsKey("switchColors")) {
         preferences.putBool("sl_switch", doc["additional_config"]["stacklight"]["switchColors"]);
@@ -683,7 +686,7 @@ bool try_save_config(char * input) {
     if (doc["additional_config"].containsKey("working_hours")) {
       // Serial.println("Has working hours!");
       // delay(100);
-      vTaskDelay(100 / portTICK_PERIOD_MS);
+      // vTaskDelay(100 / portTICK_PERIOD_MS);
       preferences.putString("wkhrs", (const char *)doc["additional_config"]["working_hours"]);
     } else {
       preferences.remove("wkhrs");
@@ -691,13 +694,17 @@ bool try_save_config(char * input) {
     if (doc["additional_config"].containsKey("motion_detection")) {
       // Serial.println("Has motion detection!");
       // delay(100);
-      vTaskDelay(100 / portTICK_PERIOD_MS);
+      // vTaskDelay(100 / portTICK_PERIOD_MS);
       preferences.putBool("motion", true);
     } else {
       preferences.remove("motion");
     }
   }
   preferences.end();
+
+  Serial.println("doc Info:");
+  serializeJson(doc, Serial);
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
 
   strcpy(ssid, (const char *)doc["ssid"]);
   strcpy(password, (const char *)doc["password"]);
@@ -708,6 +715,8 @@ bool try_save_config(char * input) {
   preferences.begin("config", true);
   decodeWorkingHoursString(preferences.getString("wkhrs", ""));
   preferences.end();
+
+  doc.clear();
 
   return true;
 }
@@ -829,6 +838,7 @@ bool decodeWorkingHoursString(String working_hours) {
 }
 
 void try_answer_query(String input) {
+  should_deep_sleep = false;
   if (input.indexOf("device_type") != -1) {
 #ifdef NAME
     Serial.println("Device Info:");
@@ -852,7 +862,8 @@ void try_answer_query(String input) {
       synthesisDoc["additional_config"]["endpoint"] = preferences.getString("endpoint", "api.groundlight.ai");
     }
     if (preferences.isKey("tConf")) {
-      synthesisDoc["targetConfidence"] = preferences.getFloat("tConf", targetConfidence);
+      // synthesisDoc["additional_config"]["target_confidence"] = preferences.getFloat("tConf", targetConfidence);
+      synthesisDoc["additional_config"]["target_confidence"] = preferences.getString("tCStr", "0.9");
     }
     if (preferences.isKey("waitTime")) {
       synthesisDoc["waitTime"] = preferences.getInt("waitTime", retryLimit);
@@ -896,7 +907,8 @@ void try_answer_query(String input) {
   } else if (input.indexOf("state") != -1) {
     preferences.begin("config");
     synthesisDoc["wifi_state"] = WiFi.isConnected() ? "Connected" : "Disconnected";
-    synthesisDoc["query_state"] = queryStateToString(queryState);
+    // synthesisDoc["query_state"] = queryStateToString(queryState);
+    synthesisDoc["query_state"] = queryStateToString((QueryState) preferences.getInt("qSt", queryState));
     if (preferences.isKey("notiOptns") && preferences.getString("notiOptns", "None") != "None") {
       synthesisDoc["notification_state"] = notificationStateToString(notificationState);
     }

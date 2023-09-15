@@ -19,9 +19,6 @@
 #ifdef HAS_ESP_CAMERA_LIB
   String submit_image_query(camera_fb_t *image_bytes, char *endpoint, char *detector_id, char *api_token);
   String submit_image_query_with_client(camera_fb_t *image_bytes, const char *endpoint, char *detector_id, char *api_token, WiFiClient &client, int port);
-  // String submit_image_query_with_client_https(camera_fb_t *image_bytes, const char *endpoint, char *detector_id, char *api_token);
-  // String submit_image_query_with_client(camera_fb_t *image_bytes, const char *endpoint, char *detector_id, char *api_token, WiFiClient client);
-  // String submit_image_query_with_client_https(camera_fb_t *image_bytes, const char *endpoint, char *detector_id, char *api_token, WiFiClientSecure client);
 #endif
 
 String get_image_query(char *endpoint, const char *query_id, char *api_token);

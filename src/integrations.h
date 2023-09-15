@@ -1,5 +1,3 @@
-// #pragma once
-
 #include <Arduino.h>
 #include <ESP_Mail_Client.h>
 #include <ArduinoJson.h>
@@ -33,10 +31,14 @@ SMTPSession smtp;
 
 Twilio *twilio;
 
-bool sendSlackNotification(String detectorName, String query, String key, String endpoint, String label, camera_fb_t *fb) {
-    // // Serial.print("Posting message to Slack: ");
-    // // Serial.println(message);
+enum SlackNotificationResult {
+    SUCCESS,
+    POST_FAILURE_BUT_POSSIBLE_SUCCESS,
+    CONNECTION_FAILURE,
+    CLIENT_FAILURE,
+};
 
+SlackNotificationResult sendSlackNotification(String detectorName, String query, String key, String endpoint, String label, camera_fb_t *fb) {
     // Create a JSON object for the Slack message.
     DynamicJsonDocument slackData(1024);
     slackData["username"] = "edgelight!";
@@ -57,76 +59,64 @@ bool sendSlackNotification(String detectorName, String query, String key, String
     WiFiClientSecure *client = new WiFiClientSecure;
     HTTPClient https;
 
-    if (client)
-    {
+    if (client) {
         client->setInsecure();
         https.setTimeout(10000);
 
-        // Serial.print("[HTTPS] Preparing to post to Slack at ");
-        // Serial.println(endpoint);
-
         // Start HTTPS connection.
-        if (https.begin(*client, endpoint))
-        {
-        // Serial.print("Attempting [HTTPS] POST...\n");
+        if (https.begin(*client, endpoint)) {
 
-        String requestBody;
-        serializeJson(slackData, requestBody);
+            String requestBody;
+            serializeJson(slackData, requestBody);
 
-        // Serial.print("Request body is ");
-        // Serial.println(requestBody);
+            // Add necessary headers for the POST request.
+            https.addHeader("Content-Type", "application/json");
+            https.addHeader("Content-Length", String(requestBody.length()));
 
-        // Add necessary headers for the POST request.
-        https.addHeader("Content-Type", "application/json");
-        https.addHeader("Content-Length", String(requestBody.length()));
+            // Send the POST request and get the response code.
+            int httpsResponseCode = https.POST(requestBody);
 
-        // Send the POST request and get the response code.
-        int httpsResponseCode = https.POST(requestBody);
+            https.end();
 
-        if (httpsResponseCode > 0)
-        {
-            // Serial.printf("[HTTPS] POST... code: %d\n", httpsResponseCode);
+            if (httpsResponseCode > 0) {
+                // Serial.printf("[HTTPS] POST... code: %d\n", httpsResponseCode);
+            }
+            else {
+                // Serial.printf("[HTTPS] POST... failed, error: %d %s\n", httpsResponseCode, https.errorToString(httpsResponseCode).c_str());
+                // Serial.println("(It probably still posted to Slack!)");
+                delete client;
+                return SlackNotificationResult::POST_FAILURE_BUT_POSSIBLE_SUCCESS;
+            }
         }
-        else
-        {
-            // Serial.printf("[HTTPS] POST... failed, error: %d %s\n", httpsResponseCode, https.errorToString(httpsResponseCode).c_str());
-            // Serial.println("(It probably still posted to Slack!)");
-        }
-
-        https.end();
-        }
-        else
-        {
-        // Serial.print("Unable to connect to ");
-        // Serial.println(endpoint);
+        else {
+            // Serial.print("Unable to connect to ");
+            // Serial.println(endpoint);
             delete client;
-            return false;
+            return SlackNotificationResult::CONNECTION_FAILURE;
         }
 
         delete client;
     }
-    else
-    {
+    else {
         // Serial.println("Unable to create client for HTTPS");
-        return false;
+        return CLIENT_FAILURE;
     }
-    return true;
+    return SlackNotificationResult::SUCCESS;
 }
 
-bool sendTwilioNotification(String detectorName, String query, String sid, String key, String number, String endpoint, String label, camera_fb_t *fb) {
+enum TwilioNotificationResult {
+    SUCCESS,
+    FAILURE,
+};
+
+TwilioNotificationResult sendTwilioNotification(String detectorName, String query, String sid, String key, String number, String endpoint, String label, camera_fb_t *fb) {
     twilio = new Twilio(sid.c_str(), key.c_str());
 
     char message[150];
     sprintf(message, "Detector (%s) detected %s to the question (%s)!", detectorName.c_str(), label.c_str(), query.c_str());
     String response;
     bool success = twilio->send_message(endpoint, number, message, response);
-    if (success) {
-        // Serial.println("Sent message successfully!");
-    } else {
-        return false;
-        // Serial.println(response);
-    }
-    return true;
+    return success ? TwilioNotificationResult::SUCCESS : TwilioNotificationResult::FAILURE;
 }
 
 Session_Config emailSetup(String host, uint16_t port, String email, String key) {
@@ -181,7 +171,13 @@ Session_Config emailSetup(String host, uint16_t port, String email, String key) 
     return config;
 }
 
-bool sendEmailNotification(String detectorName, String query, String key, String email, String endpoint, String host, String label, camera_fb_t *fb) {
+enum EmailNotificationResult {
+    SUCCESS,
+    CONNECTION_FAILURE,
+    SENDING_FAILURE,
+};
+
+EmailNotificationResult sendEmailNotification(String detectorName, String query, String key, String email, String endpoint, String host, String label, camera_fb_t *fb) {
     Session_Config config = emailSetup(host, esp_mail_smtp_port_587, email, key);
 
     /* Declare the message class */
@@ -192,28 +188,20 @@ bool sendEmailNotification(String detectorName, String query, String key, String
 
     /* Set the message headers */
     message.sender.name = F("ESP Mail");
-    // message.sender.email = AUTHOR_EMAIL;
     message.sender.email = email;
 
-    // message.subject = F("Test sending camera image");
     String subject = detectorName;
     subject += " detected ";
     subject += label;
     message.subject = subject.c_str();
-    // message.addRecipient(F("user1"), RECIPIENT_EMAIL);
     message.addRecipient(F("user1"), endpoint);
 
     /* Set the message content */
     char message_str[1000];
     sprintf(message_str, "Detector (%s) detected %s to the question (%s)!", detectorName.c_str(), label.c_str(), query.c_str());
-    // String content = "<span style=\"color:#ff0000;\">";
-    // content += "Result: ";
-    // content += label;
     String content = message_str;
-    // content += "</span><br/><br/><img src=\"cid:image-001\" alt=\"esp32 cam image\"  width=\"2048\" height=\"1536\">";
     content += "<br/><br/><img src=\"cid:image-001\" alt=\"esp32 cam image\"  width=\"2048\" height=\"1536\">";
 
-    // message.html.content = F("<span style=\"color:#ff0000;\">The camera image.</span><br/><br/><img src=\"cid:image-001\" alt=\"esp32 cam image\"  width=\"2048\" height=\"1536\">");
     message.html.content = content;
 
     /** The content transfer encoding e.g.
@@ -233,8 +221,6 @@ bool sendEmailNotification(String detectorName, String query, String key, String
      * The default value is utf-8
      */
     message.html.charSet = F("utf-8");
-
-    // camera_fb_t *fb = esp_camera_fb_get();
 
     SMTP_Attachment att;
 
@@ -260,24 +246,14 @@ bool sendEmailNotification(String detectorName, String query, String key, String
     if (!smtp.connect(&config))
     {
         // ESP_MAIL_PRINTF("Connection error, Status Code: %d, Error Code: %d, Reason: %s", smtp.statusCode(), smtp.errorCode(), smtp.errorReason().c_str());
-        return false;
+        return EmailNotificationResult::CONNECTION_FAILURE;
     }
-
-    // if (smtp.isAuthenticated())
-        // Serial.println("\nSuccessfully logged in.");
-    // else
-        // Serial.println("\nConnected with no Auth.");
 
     /* Start sending the Email and close the session */
     if (!MailClient.sendMail(&smtp, &message, true)) {
         // ESP_MAIL_PRINTF("Error, Status Code: %d, Error Code: %d, Reason: %s", smtp.statusCode(), smtp.errorCode(), smtp.errorReason().c_str());
-        return false;
+        return EmailNotificationResult::SENDING_FAILURE;
     }
 
-    // to clear sending result log
-    // smtp.sendingResult.clear();
-
-    // ESP_MAIL_PRINTF("Free Heap: %d\n", MailClient.getFreeHeap());
-
-    return true;
+    return EmailNotificationResult::SUCCESS;
 }

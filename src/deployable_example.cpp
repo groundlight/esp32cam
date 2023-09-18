@@ -39,10 +39,20 @@ SOFTWARE.
 #ifdef CAMERA_MODEL_M5STACK_PSRAM
   #define RESET_SETTINGS_GPIO         38
   #define RESET_SETTINGS_GPIO_DEFAULT LOW
+  #include <Adafruit_NeoPixel.h>
+  #define NEOPIXEL_PIN                G4 // (SDA) if doesn't work, try G13 (SCL)
+  #define NEOPIXEL_COUNT              3
 #else
   #define RESET_SETTINGS_GPIO         -1
   #define RESET_SETTINGS_GPIO_DEFAULT HIGH
 #endif
+
+#define FRAME_ARR_LEN 1280 * 1024 * 2 / 64
+uint8_t *frame_565;
+uint8_t *frame_565_old;
+#define ALPHA_DIVISOR 10
+#define ALPHA FRAME_ARR_LEN / ALPHA_DIVISOR
+#define BETA 20 // out of 31
 
 enum QueryState {
   WAITING_TO_QUERY,
@@ -158,10 +168,55 @@ bool new_data = false;
 StaticJsonDocument<1024> resultDoc;
 StaticJsonDocument<1024> synthesisDoc;
 
+#ifdef NEOPIXEL_PIN
+  Adafruit_NeoPixel pixels(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+  void pixelControllerTask(void * parameter) {
+    bool yellow_was_on = false;
+    int delay_ms = 200;
+    int flash_delay_ms = 1000;
+    int inter_per_flash = flash_delay_ms / delay_ms;
+    while (true) {
+      for (int i = 0; i < inter_per_flash; i++) {
+        String label = last_label;
+        label.toUpperCase();
+        if (label == "PASS" || label == "YES") {
+          pixels.setPixelColor(0, pixels.Color(0, 255, 0));
+          pixels.setPixelColor(1, pixels.Color(0, 0, 0));
+          pixels.setPixelColor(2, pixels.Color(0, 0, 0));
+        } else if (label == "FAIL" || label == "NO") {
+          pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+          pixels.setPixelColor(1, pixels.Color(0, 0, 0));
+          pixels.setPixelColor(2, pixels.Color(255, 0, 0));
+        } else if (label == "UNSURE" || label == "__UNSURE") {
+          pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+          pixels.setPixelColor(1, pixels.Color(255, 255, 0));
+          pixels.setPixelColor(2, pixels.Color(0, 0, 0));
+        } else if (i == 0) {
+          if (yellow_was_on) {
+            yellow_was_on = false;
+            pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+            pixels.setPixelColor(1, pixels.Color(0, 0, 0));
+            pixels.setPixelColor(2, pixels.Color(0, 0, 0));
+          } else {
+            yellow_was_on = true;
+            pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+            pixels.setPixelColor(1, pixels.Color(255, 255, 0));
+            pixels.setPixelColor(2, pixels.Color(0, 0, 0));
+          }
+        }
+        pixels.show();
+        vTaskDelay(delay_ms / portTICK_PERIOD_MS);
+      }
+    }
+  }
+#endif
+
 void listener(void * parameter);
 
 bool try_save_config(char * input);
 void try_answer_query(String input);
+bool is_motion_detected(camera_fb_t* frame, int alpha, int beta);
 
 void printInfo();
 bool shouldDoNotification(String queryRes);
@@ -209,7 +264,18 @@ void setup() {
       debug("Reset settings!");
     }
   }
+#ifdef NEOPIXEL_PIN
+  pixels.begin();
 
+  xTaskCreate(
+    pixelControllerTask,         // Function that should be called
+    "Pixel Controller",  // Name of the task (for debugging)
+    5000,            // Stack size (bytes)
+    NULL,             // Parameter to pass
+    1,                // Task priority
+    NULL              // Task handle
+  );
+#endif
   preferences.begin("config", false);
   if (preferences.isKey("ssid") && preferences.isKey("password") && preferences.isKey("api_key") && preferences.isKey("det_id") && preferences.isKey("query_delay")) {
     preferences.getString("ssid", ssid, 100);
@@ -298,6 +364,10 @@ void setup() {
     ESP.restart(); // some boards are less reliable for initialization and will everntually just start working
     return;
   }
+
+  // alloc memory for 565 frames
+  frame_565 = (uint8_t *) ps_malloc(FRAME_ARR_LEN);
+  frame_565_old = (uint8_t *) ps_malloc(FRAME_ARR_LEN);
 
   debug((StringSumHelper) "using detector  : " + groundlight_det_id);
 #ifdef LED_BUILTIN
@@ -421,8 +491,16 @@ void loop () {
 
   preferences.begin("config");
   if (preferences.isKey("motion") && preferences.getBool("motion")) {
-    debug("Checking for motion...");
-    debug("Buffer size" + frame->len);
+    // if (is_motion_detected(frame, ALPHA, BETA)) {
+    if (is_motion_detected(frame, preferences.getInt("mot_a", ALPHA), preferences.getInt("mot_b", BETA))) {
+      debug("Motion detected!");
+    } else {
+      esp_camera_fb_return(frame);
+      if (should_deep_sleep) {
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+        deep_sleep();
+      }
+    }
   }
   preferences.end();
 
@@ -637,6 +715,14 @@ bool try_save_config(char * input) {
     if (doc["additional_config"].containsKey("motion_detection")) {
       debug("Has motion detection!");
       preferences.putBool("motion", true);
+      if (doc["additional_config"]["motion_detection"].containsKey("alpha")) {
+        debug("Has alpha!");
+        preferences.putInt("mot_a", doc["additional_config"]["motion_detection"]["alpha"]);
+        preferences.putInt("mot_b", doc["additional_config"]["motion_detection"]["beta"]);
+      } else {
+        preferences.remove("mot_a");
+        preferences.remove("mot_b");
+      }
     } else {
       preferences.remove("motion");
     }
@@ -861,4 +947,33 @@ void try_answer_query(String input) {
     Serial.println();
     synthesisDoc.clear();
   }
+}
+
+bool is_motion_detected(camera_fb_t* frame, int alpha, int beta) {
+  bool worked = jpg2rgb565(frame->buf, frame->len, frame_565, JPG_SCALE_8X);
+  if (!worked) {
+    return false;
+  }
+  // try to detect motion
+  int num_diffs = 0;
+  for (int i = 0; i < FRAME_ARR_LEN; i += 2) {
+    uint16_t color = (frame_565[i] << 8) | frame_565[i + 1];
+    uint16_t color_old = (frame_565_old[i] << 8) | frame_565_old[i + 1];
+    uint8_t b_diff = abs((color & 0b11111) - (color_old & 0b11111));
+    uint8_t g_diff = abs(((color >> 5) & 0b111111) - ((color_old >> 5) & 0b111111));
+    uint8_t r_diff = abs(((color >> 11) & 0b11111) - ((color_old >> 11) & 0b11111));
+    if (b_diff > beta || (g_diff >> 1) > beta || r_diff > beta) {
+      num_diffs++;
+    }
+  }
+  bool motion_detected = num_diffs > alpha;
+
+  if (motion_detected) {
+    for (int i = 0; i < FRAME_ARR_LEN; i += 2) {
+      frame_565_old[i] = frame_565[i];
+      frame_565_old[i + 1] = frame_565[i + 1];
+    }
+  }
+
+  return motion_detected;
 }

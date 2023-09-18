@@ -353,7 +353,8 @@ void setup() {
   config.pixel_format = PIXFORMAT_JPEG;
 
   // Photo Quality Settings
-  config.frame_size = FRAMESIZE_UXGA; // See here for a list of options and resolutions: https://github.com/espressif/esp32-camera/blob/master/driver/include/sensor.h#L84
+  // config.frame_size = FRAMESIZE_UXGA; // See here for a list of options and resolutions: https://github.com/espressif/esp32-camera/blob/master/driver/include/sensor.h#L84
+  config.frame_size = FRAMESIZE_SXGA; // See here for a list of options and resolutions: https://github.com/espressif/esp32-camera/blob/master/driver/include/sensor.h#L84
   config.jpeg_quality = 10;           // lower means higher quality
   config.fb_count = 1;
 

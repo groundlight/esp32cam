@@ -39,6 +39,11 @@ enum class SlackNotificationResult {
 };
 
 SlackNotificationResult sendSlackNotification(String detectorName, String query, String key, String endpoint, String label, camera_fb_t *fb) {
+    // if (endpoint.indexOf("slack.com/api/chat.postMessage") != -1) {
+    //     String image_upload_endpoint = endpoint;
+    //     image_upload_endpoint.replace("chat.postMessage", "files.upload");
+    // }
+
     // Create a JSON object for the Slack message.
     DynamicJsonDocument slackData(1024);
     slackData["username"] = "edgelight!";
@@ -50,6 +55,7 @@ SlackNotificationResult sendSlackNotification(String detectorName, String query,
     char title[100];
     sprintf(title, "Detector (%s) detected %s to the question (%s)!\n", detectorName.c_str(), label.c_str(), query.c_str());
     fields["title"] = title;
+    attachments["fallback"] = title;
     fields["short"] = "false";
 
     serializeJson(slackData, Serial);

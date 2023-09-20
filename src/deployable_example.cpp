@@ -39,10 +39,20 @@ SOFTWARE.
 #ifdef CAMERA_MODEL_M5STACK_PSRAM
   #define RESET_SETTINGS_GPIO         38
   #define RESET_SETTINGS_GPIO_DEFAULT LOW
+  #include <Adafruit_NeoPixel.h>
+  #define NEOPIXEL_PIN                G4 // (SDA) if doesn't work, try G13 (SCL)
+  #define NEOPIXEL_COUNT              3
 #else
   #define RESET_SETTINGS_GPIO         -1
   #define RESET_SETTINGS_GPIO_DEFAULT HIGH
 #endif
+
+#define FRAME_ARR_LEN 1280 * 1024 * 2 / 64
+uint8_t *frame_565;
+uint8_t *frame_565_old;
+#define ALPHA_DIVISOR 10
+#define ALPHA FRAME_ARR_LEN / ALPHA_DIVISOR
+#define BETA 20 // out of 31
 
 enum QueryState {
   WAITING_TO_QUERY,
@@ -158,10 +168,55 @@ bool new_data = false;
 StaticJsonDocument<1024> resultDoc;
 StaticJsonDocument<1024> synthesisDoc;
 
+#ifdef NEOPIXEL_PIN
+  Adafruit_NeoPixel pixels(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+  void pixelControllerTask(void * parameter) {
+    bool yellow_was_on = false;
+    int delay_ms = 200;
+    int flash_delay_ms = 1000;
+    int inter_per_flash = flash_delay_ms / delay_ms;
+    while (true) {
+      for (int i = 0; i < inter_per_flash; i++) {
+        String label = last_label;
+        label.toUpperCase();
+        if (label == "PASS" || label == "YES") {
+          pixels.setPixelColor(0, pixels.Color(0, 255, 0));
+          pixels.setPixelColor(1, pixels.Color(0, 0, 0));
+          pixels.setPixelColor(2, pixels.Color(0, 0, 0));
+        } else if (label == "FAIL" || label == "NO") {
+          pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+          pixels.setPixelColor(1, pixels.Color(0, 0, 0));
+          pixels.setPixelColor(2, pixels.Color(255, 0, 0));
+        } else if (label == "UNSURE" || label == "__UNSURE") {
+          pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+          pixels.setPixelColor(1, pixels.Color(255, 255, 0));
+          pixels.setPixelColor(2, pixels.Color(0, 0, 0));
+        } else if (i == 0) {
+          if (yellow_was_on) {
+            yellow_was_on = false;
+            pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+            pixels.setPixelColor(1, pixels.Color(0, 0, 0));
+            pixels.setPixelColor(2, pixels.Color(0, 0, 0));
+          } else {
+            yellow_was_on = true;
+            pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+            pixels.setPixelColor(1, pixels.Color(255, 255, 0));
+            pixels.setPixelColor(2, pixels.Color(0, 0, 0));
+          }
+        }
+        pixels.show();
+        vTaskDelay(delay_ms / portTICK_PERIOD_MS);
+      }
+    }
+  }
+#endif
+
 void listener(void * parameter);
 
 bool try_save_config(char * input);
 void try_answer_query(String input);
+bool is_motion_detected(camera_fb_t* frame, int alpha, int beta);
 
 void printInfo();
 bool shouldDoNotification(String queryRes);
@@ -174,6 +229,115 @@ void deep_sleep() {
   esp_sleep_enable_timer_wakeup(time_to_sleep);
   esp_deep_sleep_start();
 }
+
+#ifdef ENABLE_AP
+  #include <AsyncTCP.h>
+  #include <ESPAsyncWebServer.h>
+
+  AsyncWebServer server(80);
+
+const char index_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html><head>
+  <title>ESP Input Form</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    form {
+      display: flex;
+      flex-direction: column;
+      place-items: center normal;
+    }
+    input {
+      width: 80vw;
+      margin: 10px;
+    }
+    input[type=submit] {
+      width: 100px;
+      margin: 10px;
+      background-color: #4CAF50;
+      color: white;
+      padding: 14px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    input[type=submit]:hover {
+      background-color: #45a049;
+    }
+  </style>
+  </head><body>
+  <form action="/config">
+    WiFi SSID: <input type="text" name="ssid" value="%ssid%">
+    WiFi Password: <input type="text" name="pw" value="%password%">
+    Detector Id: <input type="text" name="det_id" value="%det_id%">
+    API Key: <input type="text" name="api_key" value="%api_key%">
+    Query Delay (seconds): <input type="text" name="query_delay" value="%query_delay%">
+    Endpoint: <input type="text" name="endpoint" value="%endpoint%">
+    Target Confidence: <input type="text" name="tConf" value="%tConf%">
+    Motion Alpha: <input type="text" name="mot_a" value="%mot_a%">
+    Motion Beta: <input type="text" name="mot_b" value="%mot_b%">
+    Stacklight UUID: <input type="text" name="sl_uuid" value="%sl_uuid%">
+    Slack URL: <input type="text" name="slack_url" value="%slack_url%">
+    Email: <input type="text" name="email" value="%email%">
+    Email Endpoint: <input type="text" name="email_endpoint" value="%email_endpoint%">
+    Email Key: <input type="text" name="email_key" value="%email_key%">
+    Email Host: <input type="text" name="email_host" value="%email_host%">
+    Twilio SID: <input type="text" name="twilio_sid" value="%twilio_sid%">
+    Twilio Token: <input type="text" name="twilio_token" value="%twilio_token%">
+    Twilio Number: <input type="text" name="twilio_number" value="%twilio_number%">
+    Twilio Recipient: <input type="text" name="twilio_recipient" value="%twilio_recipient%">
+    <input type="submit" value="Submit">
+  </form>
+</body></html>
+)rawliteral";
+
+const char sent_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html><head>
+  <title>ESP Input Form</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    h1 {
+      font-size: 2em;
+    }
+  </style>
+  </head><body>
+  <h1>Configuration Sent!</h1>
+  <a href="/">Return to Home Page</a>
+</body></html>
+)rawliteral";
+
+void notFound(AsyncWebServerRequest *request) {
+  request->send(404, "text/plain", "Not found");
+}
+
+String processor(const String& var) {
+  preferences.begin("config");
+  // String out = String();
+  String out = "";
+  // if (var == "ssid") return String(ssid);
+  if (var == "ssid") out = ssid;
+  else if (var == "password") out = password;
+  else if (var == "det_id") out = groundlight_det_id;
+  else if (var == "api_key") out = groundlight_API_key;
+  else if (var == "query_delay") out = String(query_delay);
+  else if (var == "endpoint") out = groundlight_endpoint;
+  else if (var == "tConf") out = String(targetConfidence);
+  else if (var == "mot_a" && preferences.isKey("mot_a")) out = String(preferences.getInt("mot_a", ALPHA));
+  else if (var == "mot_b" && preferences.isKey("mot_b")) out = String(preferences.getInt("mot_b", BETA));
+  else if (var == "sl_uuid" && preferences.isKey("sl_uuid")) out = preferences.getString("sl_uuid", "");
+  else if (var == "slack_url" && preferences.isKey("slack_url")) out = preferences.getString("slack_url", "");
+  else if (var == "email" && preferences.isKey("email")) out = preferences.getString("email", "");
+  else if (var == "email_endpoint" && preferences.isKey("emailEndpoint")) out = preferences.getString("emailEndpoint", "");
+  else if (var == "email_key" && preferences.isKey("emailKey")) out = preferences.getString("emailKey", "");
+  else if (var == "email_host" && preferences.isKey("emailHost")) out = preferences.getString("emailHost", "");
+  else if (var == "twilio_sid" && preferences.isKey("twilioSID")) out = preferences.getString("twilioSID", "");
+  else if (var == "twilio_token" && preferences.isKey("twilioKey")) out = preferences.getString("twilioKey", "");
+  else if (var == "twilio_number" && preferences.isKey("twilioNumber")) out = preferences.getString("twilioNumber", "");
+  else if (var == "twilio_recipient" && preferences.isKey("twilioEndpoint")) out = preferences.getString("twilioEndpoint", "");
+  preferences.end();
+  return out;
+  // return var;
+}
+#endif
 
 void setup() {
 
@@ -209,7 +373,104 @@ void setup() {
       debug("Reset settings!");
     }
   }
+#ifdef NEOPIXEL_PIN
+  pixels.begin();
 
+  xTaskCreate(
+    pixelControllerTask,         // Function that should be called
+    "Pixel Controller",  // Name of the task (for debugging)
+    5000,            // Stack size (bytes)
+    NULL,             // Parameter to pass
+    1,                // Task priority
+    NULL              // Task handle
+  );
+#endif
+#ifdef ENABLE_AP
+  WiFi.mode(WIFI_AP_STA);
+  // last 6 digits from mac address
+  String mac = WiFi.macAddress();
+  mac.replace(":", "");
+  mac = mac.substring(6);
+  WiFi.softAP((StringSumHelper) "ESP32-CAM-" + mac);
+  // Send web page with input fields to client
+  // at http://192.168.4.1/
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", index_html, processor);
+  });
+
+  server.on("/config", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    preferences.begin("config", false);
+    if (request->hasParam("ssid") && request->getParam("ssid")->value() != "") {
+      preferences.putString("ssid", request->getParam("ssid")->value());
+      strcpy(ssid, request->getParam("ssid")->value().c_str());
+    }
+    if (request->hasParam("pw") && request->getParam("pw")->value() != "") {
+      preferences.putString("password", request->getParam("pw")->value());
+      strcpy(password, request->getParam("pw")->value().c_str());
+    }
+    if (request->hasParam("det_id") && request->getParam("det_id")->value() != "") {
+      preferences.putString("det_id", request->getParam("det_id")->value());
+      strcpy(groundlight_det_id, request->getParam("det_id")->value().c_str());
+    }
+    if (request->hasParam("api_key") && request->getParam("api_key")->value() != "") {
+      preferences.putString("api_key", request->getParam("api_key")->value());
+      strcpy(groundlight_API_key, request->getParam("api_key")->value().c_str());
+    }
+    if (request->hasParam("query_delay") && request->getParam("query_delay")->value() != "") {
+      query_delay = request->getParam("query_delay")->value().toInt();
+      preferences.putInt("query_delay", query_delay);
+    }
+    if (request->hasParam("endpoint") && request->getParam("endpoint")->value() != "") {
+      preferences.putString("endpoint", request->getParam("endpoint")->value());
+      strcpy(groundlight_endpoint, request->getParam("endpoint")->value().c_str());
+    }
+    if (request->hasParam("tConf") && request->getParam("tConf")->value() != "") {
+      targetConfidence = request->getParam("tConf")->value().toFloat();
+      preferences.putFloat("tConf", targetConfidence);
+    }
+    if (request->hasParam("mot_a") && request->getParam("mot_a")->value() != "") {
+      preferences.putInt("mot_a", request->getParam("mot_a")->value().toInt());
+    }
+    if (request->hasParam("mot_b") && request->getParam("mot_b")->value() != "") {
+      preferences.putInt("mot_b", request->getParam("mot_b")->value().toInt());
+    }
+    if (request->hasParam("sl_uuid") && request->getParam("sl_uuid")->value() != "") {
+      preferences.putString("sl_uuid", request->getParam("sl_uuid")->value());
+    }
+    if (request->hasParam("slack_url") && request->getParam("slack_url")->value() != "") {
+      preferences.putString("slack_url", request->getParam("slack_url")->value());
+    }
+    if (request->hasParam("email") && request->getParam("email")->value() != "") {
+      preferences.putString("email", request->getParam("email")->value());
+    }
+    if (request->hasParam("email_endpoint") && request->getParam("email_endpoint")->value() != "") {
+      preferences.putString("emailEndpoint", request->getParam("email_endpoint")->value());
+    }
+    if (request->hasParam("email_key") && request->getParam("email_key")->value() != "") {
+      preferences.putString("emailKey", request->getParam("email_key")->value());
+    }
+    if (request->hasParam("email_host") && request->getParam("email_host")->value() != "") {
+      preferences.putString("emailHost", request->getParam("email_host")->value());
+    }
+    if (request->hasParam("twilio_sid") && request->getParam("twilio_sid")->value() != "") {
+      preferences.putString("twilioSID", request->getParam("twilio_sid")->value());
+    }
+    if (request->hasParam("twilio_token") && request->getParam("twilio_token")->value() != "") {
+      preferences.putString("twilioKey", request->getParam("twilio_token")->value());
+    }
+    if (request->hasParam("twilio_number") && request->getParam("twilio_number")->value() != "") {
+      preferences.putString("twilioNumber", request->getParam("twilio_number")->value());
+    }
+    if (request->hasParam("twilio_recipient") && request->getParam("twilio_recipient")->value() != "") {
+      preferences.putString("twilioEndpoint", request->getParam("twilio_recipient")->value());
+    }
+    // request->send(200, "text/html", "Configuration sent to your ESP Camera<br><a href=\"/\">Return to Home Page</a>");
+    request->send_P(200, "text/html", sent_html);
+    preferences.end();
+  });
+  server.onNotFound(notFound);
+  server.begin();
+#endif
   preferences.begin("config", false);
   if (preferences.isKey("ssid") && preferences.isKey("password") && preferences.isKey("api_key") && preferences.isKey("det_id") && preferences.isKey("query_delay")) {
     preferences.getString("ssid", ssid, 100);
@@ -287,7 +548,8 @@ void setup() {
   config.pixel_format = PIXFORMAT_JPEG;
 
   // Photo Quality Settings
-  config.frame_size = FRAMESIZE_UXGA; // See here for a list of options and resolutions: https://github.com/espressif/esp32-camera/blob/master/driver/include/sensor.h#L84
+  // config.frame_size = FRAMESIZE_UXGA; // See here for a list of options and resolutions: https://github.com/espressif/esp32-camera/blob/master/driver/include/sensor.h#L84
+  config.frame_size = FRAMESIZE_SXGA; // See here for a list of options and resolutions: https://github.com/espressif/esp32-camera/blob/master/driver/include/sensor.h#L84
   config.jpeg_quality = 10;           // lower means higher quality
   config.fb_count = 1;
 
@@ -298,6 +560,10 @@ void setup() {
     ESP.restart(); // some boards are less reliable for initialization and will everntually just start working
     return;
   }
+
+  // alloc memory for 565 frames
+  frame_565 = (uint8_t *) ps_malloc(FRAME_ARR_LEN);
+  frame_565_old = (uint8_t *) ps_malloc(FRAME_ARR_LEN);
 
   debug((StringSumHelper) "using detector  : " + groundlight_det_id);
 #ifdef LED_BUILTIN
@@ -421,8 +687,18 @@ void loop () {
 
   preferences.begin("config");
   if (preferences.isKey("motion") && preferences.getBool("motion")) {
-    debug("Checking for motion...");
-    debug("Buffer size" + frame->len);
+    // if (is_motion_detected(frame, ALPHA, BETA)) {
+    if (is_motion_detected(frame, preferences.getInt("mot_a", ALPHA), preferences.getInt("mot_b", BETA))) {
+      debug("Motion detected!");
+    } else {
+      esp_camera_fb_return(frame);
+      if (should_deep_sleep) {
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+        deep_sleep();
+      } else {
+        return;
+      }
+    }
   }
   preferences.end();
 
@@ -434,6 +710,7 @@ void loop () {
     }
   }
 
+  // could be '{"detail":"Not found."}'
   queryResults = submit_image_query(frame, groundlight_endpoint, groundlight_det_id, groundlight_API_key);
   String queryId = get_query_id(queryResults);
 
@@ -442,10 +719,15 @@ void loop () {
   debug("Confidence:");
   debug(get_query_confidence(queryResults));
 
+  if (queryId == "NONE" || queryId == "") {
+    debug("Failed to get query ID");
+    esp_camera_fb_return(frame);
+    return;
+  }
+
   // wait for confident answer
   int currTime = millis();
-  while (get_query_confidence(queryResults) < targetConfidence)
-  {
+  while (get_query_confidence(queryResults) < targetConfidence) {
     debug("Waiting for confident answer...");
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     queryResults = get_image_query(groundlight_endpoint, queryId.c_str(), groundlight_API_key);
@@ -597,6 +879,7 @@ bool try_save_config(char * input) {
         preferences.putString("slackEndpoint", (const char *)doc["additional_config"]["slack"]["slackEndpoint"]);
       } else {
         preferences.remove("slackKey");
+        preferences.remove("slackEndpoint");
       }
       if (doc["additional_config"].containsKey("twilio") && doc["additional_config"]["twilio"].containsKey("twilioKey")) {
         debug("Found twilio!");
@@ -637,6 +920,14 @@ bool try_save_config(char * input) {
     if (doc["additional_config"].containsKey("motion_detection")) {
       debug("Has motion detection!");
       preferences.putBool("motion", true);
+      if (doc["additional_config"]["motion_detection"].containsKey("alpha")) {
+        debug("Has alpha!");
+        preferences.putInt("mot_a", doc["additional_config"]["motion_detection"]["alpha"]);
+        preferences.putInt("mot_b", doc["additional_config"]["motion_detection"]["beta"]);
+      } else {
+        preferences.remove("mot_a");
+        preferences.remove("mot_b");
+      }
     } else {
       preferences.remove("motion");
     }
@@ -781,10 +1072,8 @@ bool decodeWorkingHoursString(String working_hours) {
 void try_answer_query(String input) {
   should_deep_sleep = false;
   if (input.indexOf("device_type") != -1) {
-#ifdef NAME
     Serial.println("Device Info:");
-    Serial.println((StringSumHelper)"{\"name\":\"" + (String) NAME + "\",\"type\":\"Camera\",\"version\":\"" + VERSION + "\"}");
-#endif
+    Serial.println((StringSumHelper)"{\"name\":\"" + (String) NAME + "\",\"type\":\"Camera\",\"version\":\"" + VERSION + "\",\"mac_address\":\"" + WiFi.macAddress() + "\"}");
   } else if (input.indexOf("config") != -1) {
     preferences.begin("config");
     synthesisDoc["ssid"] = preferences.getString("ssid");
@@ -836,8 +1125,10 @@ void try_answer_query(String input) {
     if (preferences.isKey("wkhrs")) {
       synthesisDoc["additional_config"]["working_hours"] = preferences.getString("wkhrs", "None");
     }
-    if (preferences.isKey("motion")) {
-      synthesisDoc["additional_config"]["motion_detection"] = preferences.getBool("motion", false);
+    if (preferences.isKey("motion") && preferences.getBool("motion", false) && preferences.isKey("mot_a") && preferences.isKey("mot_b")) {
+      // synthesisDoc["additional_config"]["motion_detection"] = preferences.getBool("motion", false);
+      synthesisDoc["additional_config"]["motion_detection"]["alpha"] = preferences.getInt("mot_a", ALPHA);
+      synthesisDoc["additional_config"]["motion_detection"]["beta"] = preferences.getInt("mot_b", BETA);
     }
     Serial.println("Device Config:");
     serializeJson(synthesisDoc, Serial);
@@ -861,4 +1152,33 @@ void try_answer_query(String input) {
     Serial.println();
     synthesisDoc.clear();
   }
+}
+
+bool is_motion_detected(camera_fb_t* frame, int alpha, int beta) {
+  bool worked = jpg2rgb565(frame->buf, frame->len, frame_565, JPG_SCALE_8X);
+  if (!worked) {
+    return false;
+  }
+  // try to detect motion
+  int num_diffs = 0;
+  for (int i = 0; i < FRAME_ARR_LEN; i += 2) {
+    uint16_t color = (frame_565[i] << 8) | frame_565[i + 1];
+    uint16_t color_old = (frame_565_old[i] << 8) | frame_565_old[i + 1];
+    uint8_t b_diff = abs((color & 0b11111) - (color_old & 0b11111));
+    uint8_t g_diff = abs(((color >> 5) & 0b111111) - ((color_old >> 5) & 0b111111));
+    uint8_t r_diff = abs(((color >> 11) & 0b11111) - ((color_old >> 11) & 0b11111));
+    if (b_diff > beta || (g_diff >> 1) > beta || r_diff > beta) {
+      num_diffs++;
+    }
+  }
+  bool motion_detected = num_diffs > alpha;
+
+  if (motion_detected) {
+    for (int i = 0; i < FRAME_ARR_LEN; i += 2) {
+      frame_565_old[i] = frame_565[i];
+      frame_565_old[i + 1] = frame_565[i + 1];
+    }
+  }
+
+  return motion_detected;
 }

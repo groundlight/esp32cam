@@ -30,8 +30,6 @@ SOFTWARE.
 #include <esp_camera.h>
 #include <time.h>
 #include "ArduinoJson.h"
-#include <AsyncTCP.h>
-#include <ESPAsyncWebServer.h>
 #include "groundlight.h"
 
 #include "camera_pins.h" // thank you seeedstudio for this file
@@ -233,6 +231,9 @@ void deep_sleep() {
 }
 
 #ifdef ENABLE_AP
+  #include <AsyncTCP.h>
+  #include <ESPAsyncWebServer.h>
+
   AsyncWebServer server(80);
 
 const char index_html[] PROGMEM = R"rawliteral(

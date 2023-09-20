@@ -394,7 +394,6 @@ void setup() {
   // Send web page with input fields to client
   // at http://192.168.4.1/
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    // request->send_P(200, "text/html", index_html);
     request->send_P(200, "text/html", index_html, processor);
   });
 
@@ -413,7 +412,7 @@ void setup() {
       strcpy(groundlight_det_id, request->getParam("det_id")->value().c_str());
     }
     if (request->hasParam("api_key") && request->getParam("api_key")->value() != "") {
-      preferences.putString("det_id", request->getParam("api_key")->value());
+      preferences.putString("api_key", request->getParam("api_key")->value());
       strcpy(groundlight_API_key, request->getParam("api_key")->value().c_str());
     }
     if (request->hasParam("query_delay") && request->getParam("query_delay")->value() != "") {

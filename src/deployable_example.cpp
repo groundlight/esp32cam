@@ -560,6 +560,11 @@ void setup() {
     ESP.restart(); // some boards are less reliable for initialization and will everntually just start working
     return;
   }
+#ifdef CAMERA_MODEL_M5STACK_PSRAM
+  sensor_t * s = esp_camera_sensor_get();
+  s->set_vflip(s, 1);
+  s->set_hmirror(s, 1);
+#endif
 
   // alloc memory for 565 frames
   frame_565 = (uint8_t *) ps_malloc(FRAME_ARR_LEN);

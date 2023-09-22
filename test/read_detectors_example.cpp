@@ -26,18 +26,12 @@ SOFTWARE.
 
 #include <Arduino.h>
 #include "WiFi.h"
-// #include "ArduinoJson.h" // https://arduinojson.org/
 #include "groundlight.h"
-#include "nvs.h"
 
 char groundlight_endpoint[40] = "api.groundlight.ai";
-// char groundlight_API_key[75] = "api_yourgroundlightapikeyhere";
-// char ssid[40] = "yourssidhere";
-// char password[40] = "yourwifipasswordhere";
-
-char groundlight_API_key[75] = "api_2RItZgXp1PihQgDr1otHndZNBBW_7yVnzYdJqkQwRZEtHXyBdqAAEqgyxQv9PD";
-char ssid[40] = "Groundlight";
-char password[40] = "we-build-robo-brains";
+char groundlight_API_key[75] = "api_yourgroundlightapikeyhere";
+char ssid[40] = "yourssidhere";
+char password[40] = "yourwifipasswordhere";
 
 void setup()
 {

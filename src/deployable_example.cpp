@@ -181,16 +181,16 @@ StaticJsonDocument<1024> synthesisDoc;
         String label = last_label;
         label.toUpperCase();
         if (label == "PASS" || label == "YES") {
-          pixels.setPixelColor(0, pixels.Color(0, 255, 0));
+          pixels.setPixelColor(0, pixels.Color(0, 100, 0));
           pixels.setPixelColor(1, pixels.Color(0, 0, 0));
           pixels.setPixelColor(2, pixels.Color(0, 0, 0));
         } else if (label == "FAIL" || label == "NO") {
           pixels.setPixelColor(0, pixels.Color(0, 0, 0));
           pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-          pixels.setPixelColor(2, pixels.Color(255, 0, 0));
+          pixels.setPixelColor(2, pixels.Color(100, 0, 0));
         } else if (label == "UNSURE" || label == "__UNSURE") {
           pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-          pixels.setPixelColor(1, pixels.Color(255, 120, 0));
+          pixels.setPixelColor(1, pixels.Color(100, 50, 0));
           pixels.setPixelColor(2, pixels.Color(0, 0, 0));
         } else if (i == 0) {
           if (yellow_was_on) {
@@ -201,7 +201,7 @@ StaticJsonDocument<1024> synthesisDoc;
           } else {
             yellow_was_on = true;
             pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-            pixels.setPixelColor(1, pixels.Color(255, 120, 0));
+            pixels.setPixelColor(1, pixels.Color(100, 50, 0));
             pixels.setPixelColor(2, pixels.Color(0, 0, 0));
           }
         }

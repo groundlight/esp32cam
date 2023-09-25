@@ -48,6 +48,7 @@ SOFTWARE.
 #endif
 
 #define FRAME_ARR_LEN 1280 * 1024 * 2 / 64
+#define COLOR_VAL_MAX 31
 uint8_t *frame_565;
 uint8_t *frame_565_old;
 #define ALPHA_DIVISOR 10
@@ -273,8 +274,8 @@ const char index_html[] PROGMEM = R"rawliteral(
     Query Delay (seconds): <input type="text" name="query_delay" value="%query_delay%">
     Endpoint: <input type="text" name="endpoint" value="%endpoint%">
     Target Confidence: <input type="text" name="tConf" value="%tConf%">
-    Motion Alpha: <input type="text" name="mot_a" value="%mot_a%">
-    Motion Beta: <input type="text" name="mot_b" value="%mot_b%">
+    Motion Alpha (float between 0 and 1): <input type="text" name="mot_a" value="%mot_a%">
+    Motion Beta (float between 0 and 1): <input type="text" name="mot_b" value="%mot_b%">
     Stacklight UUID: <input type="text" name="sl_uuid" value="%sl_uuid%">
     Slack URL: <input type="text" name="slack_url" value="%slack_url%">
     Email: <input type="text" name="email" value="%email%">
@@ -321,8 +322,8 @@ String processor(const String& var) {
   else if (var == "query_delay") out = String(query_delay);
   else if (var == "endpoint") out = groundlight_endpoint;
   else if (var == "tConf") out = String(targetConfidence);
-  else if (var == "mot_a" && preferences.isKey("mot_a")) out = String(preferences.getInt("mot_a", ALPHA));
-  else if (var == "mot_b" && preferences.isKey("mot_b")) out = String(preferences.getInt("mot_b", BETA));
+  else if (var == "mot_a" && preferences.isKey("mot_a")) out = String(preferences.getString("mot_a", "0.0"));
+  else if (var == "mot_b" && preferences.isKey("mot_b")) out = String(preferences.getString("mot_b", "0.0"));
   else if (var == "sl_uuid" && preferences.isKey("sl_uuid")) out = preferences.getString("sl_uuid", "");
   else if (var == "slack_url" && preferences.isKey("slack_url")) out = preferences.getString("slack_url", "");
   else if (var == "email" && preferences.isKey("email")) out = preferences.getString("email", "");
@@ -435,10 +436,10 @@ void setup() {
       preferences.putFloat("tConf", targetConfidence);
     }
     if (request->hasParam("mot_a") && request->getParam("mot_a")->value() != "") {
-      preferences.putInt("mot_a", request->getParam("mot_a")->value().toInt());
+      preferences.putString("mot_a", request->getParam("mot_a")->value());
     }
     if (request->hasParam("mot_b") && request->getParam("mot_b")->value() != "") {
-      preferences.putInt("mot_b", request->getParam("mot_b")->value().toInt());
+      preferences.putString("mot_b", request->getParam("mot_b")->value());
     }
     if (request->hasParam("sl_uuid") && request->getParam("sl_uuid")->value() != "") {
       preferences.putString("sl_uuid", request->getParam("sl_uuid")->value());
@@ -697,9 +698,11 @@ void loop () {
   debug((StringSumHelper) "Captured image. Encoded size is " + frame->len + " bytes");
 
   preferences.begin("config");
-  if (preferences.isKey("motion") && preferences.getBool("motion")) {
+  if (preferences.isKey("motion") && preferences.getBool("motion") && preferences.isKey("mot_a") && preferences.isKey("mot_b")) {
     // if (is_motion_detected(frame, ALPHA, BETA)) {
-    if (is_motion_detected(frame, preferences.getInt("mot_a", ALPHA), preferences.getInt("mot_b", BETA))) {
+    int alpha = round(preferences.getString("mot_a", "0.0").toFloat() * (float) FRAME_ARR_LEN);
+    int beta = round(preferences.getString("mot_b", "0.0").toFloat() * (float) COLOR_VAL_MAX);
+    if (is_motion_detected(frame, alpha, beta)) {
       debug("Motion detected!");
     } else {
       esp_camera_fb_return(frame);
@@ -938,8 +941,8 @@ bool try_save_config(char * input) {
       preferences.putBool("motion", true);
       if (doc["additional_config"]["motion_detection"].containsKey("alpha")) {
         debug("Has alpha!");
-        preferences.putInt("mot_a", doc["additional_config"]["motion_detection"]["alpha"]);
-        preferences.putInt("mot_b", doc["additional_config"]["motion_detection"]["beta"]);
+        preferences.putString("mot_a",(const char *) doc["additional_config"]["motion_detection"]["alpha"]);
+        preferences.putString("mot_b",(const char *) doc["additional_config"]["motion_detection"]["beta"]);
       } else {
         preferences.remove("mot_a");
         preferences.remove("mot_b");
@@ -1141,9 +1144,8 @@ void try_answer_query(String input) {
       synthesisDoc["additional_config"]["working_hours"] = preferences.getString("wkhrs", "None");
     }
     if (preferences.isKey("motion") && preferences.getBool("motion", false) && preferences.isKey("mot_a") && preferences.isKey("mot_b")) {
-      // synthesisDoc["additional_config"]["motion_detection"] = preferences.getBool("motion", false);
-      synthesisDoc["additional_config"]["motion_detection"]["alpha"] = preferences.getInt("mot_a", ALPHA);
-      synthesisDoc["additional_config"]["motion_detection"]["beta"] = preferences.getInt("mot_b", BETA);
+      synthesisDoc["additional_config"]["motion_detection"]["alpha"] = preferences.getString("mot_a");
+      synthesisDoc["additional_config"]["motion_detection"]["beta"] = preferences.getString("mot_b");
     }
     Serial.println("Device Config:");
     serializeJson(synthesisDoc, Serial);

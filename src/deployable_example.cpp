@@ -436,11 +436,9 @@ void setup() {
       preferences.putFloat("tConf", targetConfidence);
     }
     if (request->hasParam("mot_a") && request->getParam("mot_a")->value() != "") {
-      // preferences.putInt("mot_a", request->getParam("mot_a")->value().toInt());
       preferences.putString("mot_a", request->getParam("mot_a")->value());
     }
     if (request->hasParam("mot_b") && request->getParam("mot_b")->value() != "") {
-      // preferences.putInt("mot_b", request->getParam("mot_b")->value().toInt());
       preferences.putString("mot_b", request->getParam("mot_b")->value());
     }
     if (request->hasParam("sl_uuid") && request->getParam("sl_uuid")->value() != "") {
@@ -1146,7 +1144,6 @@ void try_answer_query(String input) {
       synthesisDoc["additional_config"]["working_hours"] = preferences.getString("wkhrs", "None");
     }
     if (preferences.isKey("motion") && preferences.getBool("motion", false) && preferences.isKey("mot_a") && preferences.isKey("mot_b")) {
-      // synthesisDoc["additional_config"]["motion_detection"] = preferences.getBool("motion", false);
       synthesisDoc["additional_config"]["motion_detection"]["alpha"] = preferences.getString("mot_a");
       synthesisDoc["additional_config"]["motion_detection"]["beta"] = preferences.getString("mot_b");
     }

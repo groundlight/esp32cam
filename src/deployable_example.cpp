@@ -391,7 +391,13 @@ void setup() {
   String mac = WiFi.macAddress();
   mac.replace(":", "");
   mac = mac.substring(6);
-  WiFi.softAP((StringSumHelper) "ESP32-CAM-" + mac);
+  preferences.begin("config", false);
+  if (preferences.isKey("ap_pw")) {
+    WiFi.softAP((StringSumHelper) "ESP32-CAM-" + mac, preferences.getString("ap_pw", "").c_str());
+  } else {
+    WiFi.softAP((StringSumHelper) "ESP32-CAM-" + mac);
+  }
+  preferences.end();
   // Send web page with input fields to client
   // at http://192.168.4.1/
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -846,6 +852,11 @@ bool try_save_config(char * input) {
   } else {
     preferences.remove("endpoint");
   }
+  if (doc.containsKey("ap_password")) {
+    preferences.putString("ap_pw", (const char *)doc["ap_password"]);
+  } else {
+    preferences.remove("ap_pw");
+  }
   if (doc.containsKey("waitTime")) {
     preferences.putInt("waitTime", doc["waitTime"]);
     retryLimit = doc["waitTime"];
@@ -1092,7 +1103,6 @@ void try_answer_query(String input) {
     if (preferences.isKey("det_query")) {
       synthesisDoc["det_query"] = preferences.getString("det_query", "None");
     }
-
     if (preferences.isKey("endpoint")) {
       synthesisDoc["additional_config"]["endpoint"] = preferences.getString("endpoint", "api.groundlight.ai");
     }

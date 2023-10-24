@@ -108,7 +108,7 @@ String submit_image_query_with_client(camera_fb_t *image_bytes, const char *endp
   if (!client.connected())
   {
     // Serial.println("SSL appears to be dead. returning QUERY_FAIL");
-    return "{ \"result\" : { \"confidence\" : 0.0, \"label\" : \"QUERY_FAIL\", \"failure_reason\": \"SSL_CONNECTION_FAILURE\" }";
+    return "{ \"result\" : { \"confidence\" : 0.0, \"label\" : \"QUERY_FAIL\", \"failure_reason\": \"SSL_CONNECTION_FAILURE\" } }";
   }
 
   uint8_t *image = image_bytes->buf;
@@ -141,6 +141,9 @@ String submit_image_query_with_client(camera_fb_t *image_bytes, const char *endp
     // Serial.print("collecting response...");
     String responseBody = collectHttpResponse(client);
     client.stop();
+    if (responseBody.indexOf("Not authenticated.") != -1) {
+      return "{ \"result\": { \"confidence\": 0.0, \"label\": \"QUERY_FAIL\", \"failure_reason\": \"NOT_AUTHENTICATED\" } }";
+    }
     return responseBody;
   }
   else

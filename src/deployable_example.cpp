@@ -62,6 +62,7 @@ enum QueryState {
   LAST_RESPONSE_PASS,
   LAST_RESPONSE_FAIL,
   LAST_RESPONSE_UNSURE,
+  NOT_AUTHENTICATED,
 };
 
 String queryStateToString (QueryState state) {
@@ -78,6 +79,8 @@ String queryStateToString (QueryState state) {
       return "LAST_RESPONSE_FAIL";
     case LAST_RESPONSE_UNSURE:
       return "LAST_RESPONSE_UNSURE";
+    case NOT_AUTHENTICATED:
+      return "NOT_AUTHENTICATED";
     default:
       return "UNKNOWN";
   }
@@ -173,7 +176,7 @@ StaticJsonDocument<1024> synthesisDoc;
   Adafruit_NeoPixel pixels(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
   void pixelControllerTask(void * parameter) {
-    bool yellow_was_on = false;
+    bool was_on = false;
     int delay_ms = 200;
     int flash_delay_ms = 1000;
     int inter_per_flash = flash_delay_ms / delay_ms;
@@ -181,7 +184,23 @@ StaticJsonDocument<1024> synthesisDoc;
       for (int i = 0; i < inter_per_flash; i++) {
         String label = last_label;
         label.toUpperCase();
-        if (label == "PASS" || label == "YES") {
+        preferences.begin("config");
+        QueryState _queryState = (QueryState) preferences.getInt("qSt", queryState);
+        preferences.end();
+        // Serial.println(queryStateToString(_queryState));
+        if ((_queryState == QueryState::DNS_NOT_FOUND || _queryState == QueryState::SSL_CONNECTION_FAILURE || _queryState == QueryState::NOT_AUTHENTICATED) && i == 0) {
+          if (was_on) {
+            was_on = false;
+            pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+            pixels.setPixelColor(1, pixels.Color(0, 0, 0));
+            pixels.setPixelColor(2, pixels.Color(0, 0, 0));
+          } else {
+            was_on = true;
+            pixels.setPixelColor(0, pixels.Color(50, 0, 0));
+            pixels.setPixelColor(1, pixels.Color(50, 0, 0));
+            pixels.setPixelColor(2, pixels.Color(50, 0, 0));
+          }
+        } else if (label == "PASS" || label == "YES") {
           pixels.setPixelColor(0, pixels.Color(0, 100, 0));
           pixels.setPixelColor(1, pixels.Color(0, 0, 0));
           pixels.setPixelColor(2, pixels.Color(0, 0, 0));
@@ -194,13 +213,13 @@ StaticJsonDocument<1024> synthesisDoc;
           pixels.setPixelColor(1, pixels.Color(100, 50, 0));
           pixels.setPixelColor(2, pixels.Color(0, 0, 0));
         } else if (i == 0) {
-          if (yellow_was_on) {
-            yellow_was_on = false;
+          if (was_on) {
+            was_on = false;
             pixels.setPixelColor(0, pixels.Color(0, 0, 0));
             pixels.setPixelColor(1, pixels.Color(0, 0, 0));
             pixels.setPixelColor(2, pixels.Color(0, 0, 0));
           } else {
-            yellow_was_on = true;
+            was_on = true;
             pixels.setPixelColor(0, pixels.Color(0, 0, 0));
             pixels.setPixelColor(1, pixels.Color(100, 50, 0));
             pixels.setPixelColor(2, pixels.Color(0, 0, 0));
@@ -752,23 +771,28 @@ void loop () {
     }
   }
   ArduinoJson::DeserializationError error = deserializeJson(resultDoc, queryResults);
+  // Serial.println(queryResults);
   if (error == ArduinoJson::DeserializationError::Ok) {
     if (resultDoc.containsKey("result")) {
       if (resultDoc["result"].containsKey("label")) {
         String label = resultDoc["result"]["label"].as<String>();
         label.toUpperCase();
+        // Serial.println((StringSumHelper) "Label: " + label);
         if (label == "QUERY_FAIL" && resultDoc["result"].containsKey("failure_reason")) {
           String reason = resultDoc["result"]["failure_reason"].as<String>();
+          // Serial.println((StringSumHelper) "Failure reason:" + reason);
           reason.toUpperCase();
           if (reason == "INITIAL_SSL_CONNECTION_FAILURE") {
             // DNS NOT FOUND
-            queryState = DNS_NOT_FOUND;
+            queryState = QueryState::DNS_NOT_FOUND;
           } else if (reason == "SSL_CONNECTION_FAILURE") {
             // SSL CONNECTION FAILURE
-            queryState = SSL_CONNECTION_FAILURE;
+            queryState = QueryState::SSL_CONNECTION_FAILURE;
           } else if (reason == "SSL_CONNECTION_FAILURE_COLLECTING_RESPONSE") {
             // SSL CONNECTION FAILURE
-            queryState = SSL_CONNECTION_FAILURE;
+            queryState = QueryState::SSL_CONNECTION_FAILURE;
+          } else if (reason == "NOT_AUTHENTICATED") {
+            queryState = QueryState::NOT_AUTHENTICATED;
           }
         } else if (label != "QUERY_FAIL") {
           if (label == "PASS" || label == "YES") {
@@ -974,6 +998,10 @@ bool try_save_config(char * input) {
 }
 
 bool shouldDoNotification(String queryRes) {
+  if (queryRes == "\nNot authenticated.") {
+    strcpy(last_label, "QUERY_FAIL");
+    return false;
+  }
   bool res = false;
   preferences.begin("config", true);
   if (preferences.isKey("notiOptns") && resultDoc["result"]["label"] != "QUERY_FAIL") {

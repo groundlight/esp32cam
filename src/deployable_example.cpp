@@ -586,11 +586,12 @@ void setup() {
     ESP.restart(); // some boards are less reliable for initialization and will everntually just start working
     return;
   }
-#ifdef CAMERA_MODEL_M5STACK_PSRAM
+  
   sensor_t * s = esp_camera_sensor_get();
-  s->set_vflip(s, 1);
-  s->set_hmirror(s, 1);
-#endif
+  preferences.begin("config", false);
+  if (preferences.getBool("flip_vert", false)) s->set_vflip(s, 1);
+  if (preferences.getBool("flip_hori", false)) s->set_hmirror(s, 1);
+  preferences.end();
 
   // alloc memory for 565 frames
   frame_565 = (uint8_t *) ps_malloc(FRAME_ARR_LEN);
@@ -974,6 +975,18 @@ bool try_save_config(char * input) {
     } else {
       preferences.remove("motion");
     }
+    if (doc["additional_config"].containsKey("flip_vert")) {
+      debug("Has flip vert!");
+      preferences.putBool("flip_vert", doc["additional_config"]["flip_vert"]);
+    } else {
+      preferences.remove("flip_vert");
+    }
+    if (doc["additional_config"].containsKey("flip_hori")) {
+      debug("Has flip hori!");
+      preferences.putBool("flip_hori", doc["additional_config"]["flip_hori"]);
+    } else {
+      preferences.remove("flip_hori");
+    }
   }
   preferences.end();
 
@@ -1174,6 +1187,12 @@ void try_answer_query(String input) {
     if (preferences.isKey("motion") && preferences.getBool("motion", false) && preferences.isKey("mot_a") && preferences.isKey("mot_b")) {
       synthesisDoc["additional_config"]["motion_detection"]["alpha"] = preferences.getString("mot_a");
       synthesisDoc["additional_config"]["motion_detection"]["beta"] = preferences.getString("mot_b");
+    }
+    if (preferences.isKey("flip_vert")) {
+      synthesisDoc["additional_config"]["flip_vert"] = preferences.getBool("flip_vert", false);
+    }
+    if (preferences.isKey("flip_hori")) {
+      synthesisDoc["additional_config"]["flip_hori"] = preferences.getBool("flip_hori", false);
     }
     Serial.println("Device Config:");
     serializeJson(synthesisDoc, Serial);

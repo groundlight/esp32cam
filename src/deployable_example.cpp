@@ -191,7 +191,6 @@ StaticJsonDocument<1024> synthesisDoc;
         preferences.begin("config");
         QueryState _queryState = (QueryState) preferences.getInt("qSt", queryState);
         preferences.end();
-        // Serial.println(queryStateToString(_queryState));
         if ((_queryState == QueryState::DNS_NOT_FOUND || _queryState == QueryState::SSL_CONNECTION_FAILURE || _queryState == QueryState::NOT_AUTHENTICATED) && i == 0) {
           if (was_on) {
             was_on = false;
@@ -585,16 +584,13 @@ void loop () {
     }
   }
   ArduinoJson::DeserializationError error = deserializeJson(resultDoc, queryResults);
-  // Serial.println(queryResults);
   if (error == ArduinoJson::DeserializationError::Ok) {
     if (resultDoc.containsKey("result")) {
       if (resultDoc["result"].containsKey("label")) {
         String label = resultDoc["result"]["label"].as<String>();
         label.toUpperCase();
-        // Serial.println((StringSumHelper) "Label: " + label);
         if (label == "QUERY_FAIL" && resultDoc["result"].containsKey("failure_reason")) {
           String reason = resultDoc["result"]["failure_reason"].as<String>();
-          // Serial.println((StringSumHelper) "Failure reason:" + reason);
           reason.toUpperCase();
           if (reason == "INITIAL_SSL_CONNECTION_FAILURE") {
             // DNS NOT FOUND
@@ -812,6 +808,7 @@ bool try_save_config(char * input) {
   vTaskDelay(100 / portTICK_PERIOD_MS);
   Serial.println("doc Info:");
   serializeJson(doc, Serial);
+  Serial.println();
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
   strcpy(ssid, (const char *)doc["ssid"]);

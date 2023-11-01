@@ -701,8 +701,6 @@ bool try_save_config(char * input) {
   }
   if (doc.containsKey("ap_password")) {
     preferences.putString("ap_pw", (const char *)doc["ap_password"]);
-  } else {
-    preferences.remove("ap_pw");
   }
   if (doc.containsKey("waitTime")) {
     preferences.putInt("waitTime", doc["waitTime"]);

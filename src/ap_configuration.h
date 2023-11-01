@@ -174,9 +174,6 @@ void startSoftAccessPoint(String ssid, String password, const IPAddress &localIP
 
 	// Start the soft access point with the given ssid, password, channel, max number of clients
     WiFi.softAP(ssid, password, WIFI_CHANNEL, 0, MAX_CLIENTS);
-    // Serial.println(ssid);
-    // Serial.println(password);
-    // WiFi.softAP(ssid, password);
 
 	// Disable AMPDU RX on the ESP32 WiFi to fix a bug on Android
 	esp_wifi_stop();
@@ -329,7 +326,7 @@ void ap_setup(String ssid, String password) {
     xTaskCreate(
         dns_listener,         // Function that should be called
         "DNS Listener",  // Name of the task (for debugging)
-        1000,            // Stack size (bytes)
+        10000,            // Stack size (bytes)
         NULL,             // Parameter to pass
         1,                // Task priority
         NULL              // Task handle

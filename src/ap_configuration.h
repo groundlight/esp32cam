@@ -1,3 +1,6 @@
+// Adapted from https://github.com/CDFER/Captive-Portal-ESP32
+// Thank you to Chris (https://github.com/CDFER) for figuring out Captive Portal on ESP32!
+
 #include <Arduino.h>  //not needed in the arduino ide
 
 // Captive Portal
@@ -9,10 +12,6 @@
 
 // Pre reading on the fundamentals of captive portals https://textslashplain.com/2022/06/24/captive-portals/
 
-// const char *ssid = "captive";  // FYI The SSID can't have a space in it.
-// // const char * password = "12345678"; //Atleast 8 chars
-// const char *password = NULL;  // no password
-
 #define MAX_CLIENTS 4	// ESP32 supports up to 10 but I have not tested it yet
 #define WIFI_CHANNEL 6	// 2.4ghz channel 6 https://en.wikipedia.org/wiki/List_of_WLAN_channels#2.4_GHz_(802.11b/g/n/ax)
 
@@ -23,24 +22,6 @@ const IPAddress subnetMask(255, 255, 255, 0);  // no need to change: https://avi
 const String localIPURL = "http://4.3.2.1";	 // a string version of the local IP with http, used for redirecting clients to your webpage
 
 Preferences preferences;
-
-// const char index_html[] PROGMEM = R"=====(
-//   <!DOCTYPE html> <html>
-//     <head>
-//       <title>ESP32 Captive Portal</title>
-//       <style>
-//         body {background-color:#06cc13;}
-//         h1 {color: white;}
-//         h2 {color: white;}
-//       </style>
-//       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-//     </head>
-//     <body>
-//       <h1>Hello World!</h1>
-//       <h2>This is a captive portal example. All requests will be redirected here </h2>
-//     </body>
-//   </html>
-// )=====";
 
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html><head>
@@ -117,9 +98,7 @@ void notFound(AsyncWebServerRequest *request) {
 
 String processor(const String& var) {
   preferences.begin("config");
-  // String out = String();
   String out = "";
-  // if (var == "ssid") return String(ssid);
   if (var == "ssid") out = preferences.getString("ssid", "");
   else if (var == "password") out = preferences.getString("password", "");
   else if (var == "det_id") out = preferences.getString("det_id", "");
@@ -141,7 +120,6 @@ String processor(const String& var) {
   else if (var == "twilio_recipient" && preferences.isKey("twilioEndpoint")) out = preferences.getString("twilioEndpoint", "");
   preferences.end();
   return out;
-  // return var;
 }
 
 DNSServer dnsServer;
@@ -163,7 +141,6 @@ void startSoftAccessPoint(String ssid, String password, const IPAddress &localIP
 #define WIFI_CHANNEL 6
 
 	// Set the WiFi mode to access point and station
-	// WiFi.mode(WIFI_MODE_AP);
 
 	// Define the subnet mask for the WiFi network
 	const IPAddress subnetMask(255, 255, 255, 0);
@@ -216,7 +193,6 @@ void setUpWebserver(AsyncWebServer &server, const IPAddress &localIP) {
 
 	// Serve Basic HTML Page
 	server.on("/", HTTP_ANY, [](AsyncWebServerRequest *request) {
-		// AsyncWebServerResponse *response = request->beginResponse(200, "text/html", index_html, processor);
 		AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", index_html, processor);
 		response->addHeader("Cache-Control", "public,max-age=31536000");  // save this file to cache for 1 year (unless you refresh)
 		request->send(response);
@@ -227,32 +203,23 @@ void setUpWebserver(AsyncWebServer &server, const IPAddress &localIP) {
     preferences.begin("config", false);
         if (request->hasParam("ssid") && request->getParam("ssid")->value() != "") {
         preferences.putString("ssid", request->getParam("ssid")->value());
-        // strcpy(ssid, request->getParam("ssid")->value().c_str());
         }
         if (request->hasParam("pw") && request->getParam("pw")->value() != "") {
         preferences.putString("password", request->getParam("pw")->value());
-        // strcpy(password, request->getParam("pw")->value().c_str());
         }
         if (request->hasParam("det_id") && request->getParam("det_id")->value() != "") {
         preferences.putString("det_id", request->getParam("det_id")->value());
-        // strcpy(groundlight_det_id, request->getParam("det_id")->value().c_str());
         }
         if (request->hasParam("api_key") && request->getParam("api_key")->value() != "") {
         preferences.putString("api_key", request->getParam("api_key")->value());
-        // strcpy(groundlight_API_key, request->getParam("api_key")->value().c_str());
         }
         if (request->hasParam("query_delay") && request->getParam("query_delay")->value() != "") {
-        // query_delay = request->getParam("query_delay")->value().toInt();
-        // preferences.putInt("query_delay", query_delay);
         preferences.putInt("query_delay", 30);
         }
         if (request->hasParam("endpoint") && request->getParam("endpoint")->value() != "") {
         preferences.putString("endpoint", request->getParam("endpoint")->value());
-        // strcpy(groundlight_endpoint, request->getParam("endpoint")->value().c_str());
         }
         if (request->hasParam("tConf") && request->getParam("tConf")->value() != "") {
-        // targetConfidence = request->getParam("tConf")->value().toFloat();
-        // preferences.putFloat("tConf", targetConfidence);
         preferences.putString("tCStr", request->getParam("tConf")->value());
         preferences.putFloat("tConf", request->getParam("tConf")->value().toFloat());
         }
@@ -292,7 +259,6 @@ void setUpWebserver(AsyncWebServer &server, const IPAddress &localIP) {
         if (request->hasParam("twilio_recipient") && request->getParam("twilio_recipient")->value() != "") {
         preferences.putString("twilioEndpoint", request->getParam("twilio_recipient")->value());
         }
-        // request->send(200, "text/html", "Configuration sent to your ESP Camera<br><a href=\"/\">Return to Home Page</a>");
         request->send_P(200, "text/html", sent_html);
         preferences.end();
     });

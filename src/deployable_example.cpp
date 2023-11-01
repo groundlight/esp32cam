@@ -132,13 +132,7 @@ camera_fb_t *frame = NULL;
 int *last_frame_buffer = NULL;
 char groundlight_endpoint[60] = "api.groundlight.ai";
 
-// Preferences preferences;
 #ifdef ENABLE_AP
-  // #include <AsyncTCP.h>
-  // #include <ESPAsyncWebServer.h>
-
-  // AsyncWebServer server(80);
-
   #include "ap_configuration.h"
 #else
   Preferences preferences;

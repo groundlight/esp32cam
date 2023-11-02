@@ -573,8 +573,8 @@ void setup() {
 
   sensor_t * s = esp_camera_sensor_get();
   preferences.begin("config", false);
-  if (!preferences.getBool("flip_vert", false)) s->set_vflip(s, 1);
-  if (preferences.getBool("flip_hori", false)) s->set_hmirror(s, 1);
+  if (!preferences.getBool("img_rotate", false)) s->set_vflip(s, 1);
+  if (preferences.getBool("img_mirror", false)) s->set_hmirror(s, 1);
   preferences.end();
 
   // alloc memory for 565 frames
@@ -954,23 +954,23 @@ bool try_save_config(char * input) {
     } else {
       preferences.remove("motion");
     }
-    if (doc["additional_config"].containsKey("flip_vert")) {
+    if (doc["additional_config"].containsKey("img_rotate")) {
       debug("Image rotation found in configuration!");
-      preferences.putBool("flip_vert", doc["additional_config"]["flip_vert"]);
+      preferences.putBool("img_rotate", doc["additional_config"]["img_rotate"]);
       sensor_t * s = esp_camera_sensor_get();
       s->set_vflip(s, 0);
     } else {
-      preferences.remove("flip_vert");
+      preferences.remove("img_rotate");
       sensor_t * s = esp_camera_sensor_get();
       s->set_vflip(s, 1);
     }
-    if (doc["additional_config"].containsKey("flip_hori")) {
+    if (doc["additional_config"].containsKey("img_mirror")) {
       debug("Image mirroring found in configuration!");
-      preferences.putBool("flip_hori", doc["additional_config"]["flip_hori"]);
+      preferences.putBool("img_mirror", doc["additional_config"]["img_mirror"]);
       sensor_t * s = esp_camera_sensor_get();
       s->set_hmirror(s, 1);
     } else {
-      preferences.remove("flip_hori");
+      preferences.remove("img_mirror");
       sensor_t * s = esp_camera_sensor_get();
       s->set_hmirror(s, 0);
     }
@@ -1176,11 +1176,11 @@ void try_answer_query(String input) {
       synthesisDoc["additional_config"]["motion_detection"]["alpha"] = preferences.getString("mot_a");
       synthesisDoc["additional_config"]["motion_detection"]["beta"] = preferences.getString("mot_b");
     }
-    if (preferences.isKey("flip_vert")) {
-      synthesisDoc["additional_config"]["flip_vert"] = preferences.getBool("flip_vert", false);
+    if (preferences.isKey("img_rotate")) {
+      synthesisDoc["additional_config"]["img_rotate"] = preferences.getBool("img_rotate", false);
     }
-    if (preferences.isKey("flip_hori")) {
-      synthesisDoc["additional_config"]["flip_hori"] = preferences.getBool("flip_hori", false);
+    if (preferences.isKey("img_mirror")) {
+      synthesisDoc["additional_config"]["img_mirror"] = preferences.getBool("img_mirror", false);
     }
     Serial.println("Device Config:");
     serializeJson(synthesisDoc, Serial);

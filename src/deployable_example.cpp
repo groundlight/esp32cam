@@ -955,7 +955,7 @@ bool try_save_config(char * input) {
       preferences.remove("motion");
     }
     if (doc["additional_config"].containsKey("flip_vert")) {
-      debug("Has flip vert!");
+      debug("Image rotation found in configuration!");
       preferences.putBool("flip_vert", doc["additional_config"]["flip_vert"]);
       sensor_t * s = esp_camera_sensor_get();
       s->set_vflip(s, 0);
@@ -965,7 +965,7 @@ bool try_save_config(char * input) {
       s->set_vflip(s, 1);
     }
     if (doc["additional_config"].containsKey("flip_hori")) {
-      debug("Has flip hori!");
+      debug("Image mirroring found in configuration!");
       preferences.putBool("flip_hori", doc["additional_config"]["flip_hori"]);
       sensor_t * s = esp_camera_sensor_get();
       s->set_hmirror(s, 1);

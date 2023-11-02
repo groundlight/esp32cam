@@ -62,6 +62,7 @@ enum QueryState {
   LAST_RESPONSE_PASS,
   LAST_RESPONSE_FAIL,
   LAST_RESPONSE_UNSURE,
+  NOT_AUTHENTICATED,
 };
 
 String queryStateToString (QueryState state) {
@@ -78,6 +79,8 @@ String queryStateToString (QueryState state) {
       return "LAST_RESPONSE_FAIL";
     case LAST_RESPONSE_UNSURE:
       return "LAST_RESPONSE_UNSURE";
+    case NOT_AUTHENTICATED:
+      return "NOT_AUTHENTICATED";
     default:
       return "UNKNOWN";
   }
@@ -567,11 +570,12 @@ void setup() {
     ESP.restart(); // some boards are less reliable for initialization and will everntually just start working
     return;
   }
-#ifdef CAMERA_MODEL_M5STACK_PSRAM
+
   sensor_t * s = esp_camera_sensor_get();
-  s->set_vflip(s, 1);
-  s->set_hmirror(s, 1);
-#endif
+  preferences.begin("config", false);
+  if (!preferences.getBool("img_rotate", false)) s->set_vflip(s, 1);
+  if (preferences.getBool("img_mirror", false)) s->set_hmirror(s, 1);
+  preferences.end();
 
   // alloc memory for 565 frames
   frame_565 = (uint8_t *) ps_malloc(FRAME_ARR_LEN);
@@ -762,21 +766,23 @@ void loop () {
           reason.toUpperCase();
           if (reason == "INITIAL_SSL_CONNECTION_FAILURE") {
             // DNS NOT FOUND
-            queryState = DNS_NOT_FOUND;
+            queryState = QueryState::DNS_NOT_FOUND;
           } else if (reason == "SSL_CONNECTION_FAILURE") {
             // SSL CONNECTION FAILURE
-            queryState = SSL_CONNECTION_FAILURE;
+            queryState = QueryState::SSL_CONNECTION_FAILURE;
           } else if (reason == "SSL_CONNECTION_FAILURE_COLLECTING_RESPONSE") {
             // SSL CONNECTION FAILURE
-            queryState = SSL_CONNECTION_FAILURE;
+            queryState = QueryState::SSL_CONNECTION_FAILURE;
+          } else if (reason == "NOT_AUTHENTICATED") {
+            queryState = QueryState::NOT_AUTHENTICATED;
           }
         } else if (label != "QUERY_FAIL") {
           if (label == "PASS" || label == "YES") {
-            queryState = LAST_RESPONSE_PASS;
+            queryState = QueryState::LAST_RESPONSE_PASS;
           } else if (label == "FAIL" || label == "NO") {
-            queryState = LAST_RESPONSE_FAIL;
+            queryState = QueryState::LAST_RESPONSE_FAIL;
           } else if (label == "UNSURE" || label == "__UNSURE") {
-            queryState = LAST_RESPONSE_UNSURE;
+            queryState = QueryState::LAST_RESPONSE_UNSURE;
           }
         }
         preferences.begin("config");
@@ -857,8 +863,6 @@ bool try_save_config(char * input) {
   }
   if (doc.containsKey("ap_password")) {
     preferences.putString("ap_pw", (const char *)doc["ap_password"]);
-  } else {
-    preferences.remove("ap_pw");
   }
   if (doc.containsKey("waitTime")) {
     preferences.putInt("waitTime", doc["waitTime"]);
@@ -950,12 +954,33 @@ bool try_save_config(char * input) {
     } else {
       preferences.remove("motion");
     }
+    if (doc["additional_config"].containsKey("img_rotate")) {
+      debug("Image rotation found in configuration!");
+      preferences.putBool("img_rotate", doc["additional_config"]["img_rotate"]);
+      sensor_t * s = esp_camera_sensor_get();
+      s->set_vflip(s, 0);
+    } else {
+      preferences.remove("img_rotate");
+      sensor_t * s = esp_camera_sensor_get();
+      s->set_vflip(s, 1);
+    }
+    if (doc["additional_config"].containsKey("img_mirror")) {
+      debug("Image mirroring found in configuration!");
+      preferences.putBool("img_mirror", doc["additional_config"]["img_mirror"]);
+      sensor_t * s = esp_camera_sensor_get();
+      s->set_hmirror(s, 1);
+    } else {
+      preferences.remove("img_mirror");
+      sensor_t * s = esp_camera_sensor_get();
+      s->set_hmirror(s, 0);
+    }
   }
   preferences.end();
 
   vTaskDelay(100 / portTICK_PERIOD_MS);
   Serial.println("doc Info:");
   serializeJson(doc, Serial);
+  Serial.println();
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
   strcpy(ssid, (const char *)doc["ssid"]);
@@ -974,6 +999,10 @@ bool try_save_config(char * input) {
 }
 
 bool shouldDoNotification(String queryRes) {
+  if (queryRes == "\nNot authenticated.") {
+    strcpy(last_label, "QUERY_FAIL");
+    return false;
+  }
   bool res = false;
   preferences.begin("config", true);
   if (preferences.isKey("notiOptns") && resultDoc["result"]["label"] != "QUERY_FAIL") {
@@ -1146,6 +1175,12 @@ void try_answer_query(String input) {
     if (preferences.isKey("motion") && preferences.getBool("motion", false) && preferences.isKey("mot_a") && preferences.isKey("mot_b")) {
       synthesisDoc["additional_config"]["motion_detection"]["alpha"] = preferences.getString("mot_a");
       synthesisDoc["additional_config"]["motion_detection"]["beta"] = preferences.getString("mot_b");
+    }
+    if (preferences.isKey("img_rotate")) {
+      synthesisDoc["additional_config"]["img_rotate"] = preferences.getBool("img_rotate", false);
+    }
+    if (preferences.isKey("img_mirror")) {
+      synthesisDoc["additional_config"]["img_mirror"] = preferences.getBool("img_mirror", false);
     }
     Serial.println("Device Config:");
     serializeJson(synthesisDoc, Serial);

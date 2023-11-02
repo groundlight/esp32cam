@@ -17,7 +17,7 @@ The ESP32CAM Edgelight Client is firmware for the ESP32 microcontroller that all
 
 This tool is designed to make it as easy as possible to deploy your Groundlight detector on an ESP32 Camera Board. You can deploy your detector in just a few clicks.
 
-1. Go to https://code.groundlight.ai/groundlight-embedded-uploader/.
+1. Go to https://iot.groundlight.ai/espcam.
 2. Plug your ESP32 Camera Board into your computer with a USB cable.
 3. Click through the steps to upload your detector to your ESP32 Camera Board.
 
@@ -36,7 +36,7 @@ You can pair your ESP32 Camera Board with a Stacklight to receive visual feedbac
 
 To pair your ESP32 Camera Board with a Stacklight, follow these steps:
 
-1. Go to https://code.groundlight.ai/groundlight-embedded-uploader/.
+1. Go to https://iot.groundlight.ai/espcam.
 2. Plug your ESP32 Camera Board into your computer with a USB cable.
 3. Flash your ESP32 Camera Board with the Edgelight firmware if you haven't already.
 4. On the second step of the deployment process, click the checkbox to enable Stacklight feedback and enter the six digit code on your Stacklight into the text box.

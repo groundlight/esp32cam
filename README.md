@@ -36,7 +36,7 @@ You can pair your ESP32 Camera Board with a Stacklight to receive visual feedbac
 
 To pair your ESP32 Camera Board with a Stacklight, follow these steps:
 
-1. Go to https://iot.groundlight.ai/stacklight.
+1. Go to https://iot.groundlight.ai/espcam.
 2. Plug your ESP32 Camera Board into your computer with a USB cable.
 3. Flash your ESP32 Camera Board with the Edgelight firmware if you haven't already.
 4. On the second step of the deployment process, click the checkbox to enable Stacklight feedback and enter the six digit code on your Stacklight into the text box.

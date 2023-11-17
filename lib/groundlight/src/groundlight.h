@@ -32,7 +32,7 @@ struct detector
   char type[40];
   char created_at[60];
   char name[40];
-  char query[40];
+  char query[200];
   char group_name[40];
   float confidence_threshold;
 };

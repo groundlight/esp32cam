@@ -223,6 +223,9 @@ void try_answer_query(String input);
 bool is_motion_detected(camera_fb_t* frame, int alpha, int beta);
 
 void printInfo();
+int consecutive_pass_limit = 3;
+RTC_DATA_ATTR int consecutive_pass = 0;
+RTC_DATA_ATTR bool notification_sent = false;
 bool shouldDoNotification(String queryRes);
 bool sendNotifications(char *label, camera_fb_t *fb);
 bool notifyStacklight(const char * label);
@@ -601,7 +604,7 @@ void listener(void * parameter) {
       input3_index++;
       break;
     }
-    
+
     if (new_data_) {
       debug("New data");
       vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -647,6 +650,13 @@ void loop () {
   } else {
     last_upload_time = millis();
     debug("Taking a lap!");
+    // TODO: hide behind debug flag?
+    Serial.println("WiFi MAC Address:");
+    Serial.println(WiFi.macAddress());
+    esp_chip_info_t chip_info;
+    esp_chip_info(&chip_info);
+    Serial.println("Chip Rev:");
+    Serial.println(chip_info.revision);
   }
 
   preferences.begin("config", true);
@@ -895,7 +905,7 @@ bool try_save_config(char * input) {
     }
     if (doc["additional_config"].containsKey("notificationOptions") && doc["additional_config"]["notificationOptions"] != "None") {
       debug("Found notification options!");
-      preferences.putString("notiOptns", (const char *)doc["additional_config"]["notificationOptions"]);  
+      preferences.putString("notiOptns", (const char *)doc["additional_config"]["notificationOptions"]);
       if (doc["additional_config"].containsKey("slack") && doc["additional_config"]["slack"].containsKey("slackKey")) {
         debug("Found slack!");
         preferences.putString("slackKey", (const char *)doc["additional_config"]["slack"]["slackKey"]);
@@ -1009,7 +1019,7 @@ bool shouldDoNotification(String queryRes) {
     String notiOptns = preferences.getString("notiOptns", "None");
     if (notiOptns == "None") {
       // do nothing
-    } else if (notiOptns == "On Change") {
+    } else if (notiOptns == "On Change") { // TODO: last_label isn't stored in persistant memory
       if (resultDoc["result"]["label"] != last_label) {
         res = true;
       }
@@ -1020,6 +1030,28 @@ bool shouldDoNotification(String queryRes) {
     } else if (notiOptns == "On Yes/Pass") {
       if (resultDoc["result"]["label"] == "YES" || resultDoc["result"]["label"] == "PASS") {
         res = true;
+      }
+    } else if (notiOptns == "On 2 Yes") {
+        if (resultDoc["result"]["label"] != "QUERY_FAIL") {
+          String label = resultDoc["result"]["label"];
+          label.toUpperCase();
+          debug("What label did we get?");
+          debug(label);
+          bool sanity = (label == "PASS");
+          if (label == "PASS" || label == "YES") {
+            debug("incrementing consecutive_pass");
+            consecutive_pass++;
+          }
+          else {
+            consecutive_pass = 0;
+            notification_sent = false;
+          }
+        if (consecutive_pass >= consecutive_pass_limit) {
+          if (notification_sent == false) {
+            debug("We should send a notification!!!!!!!!!!!");
+            res = true;
+            notification_sent = true;
+        }
       }
     }
   }

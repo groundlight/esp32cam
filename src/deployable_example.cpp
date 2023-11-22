@@ -1055,11 +1055,11 @@ bool shouldDoNotification(String queryRes) {
       }
     }
   }
-  strcpy(last_label, resultDoc["result"]["label"]);
-  preferences.end();
-  return res;
+    strcpy(last_label, resultDoc["result"]["label"]);
+    preferences.end();
+    return res;
+  }
 }
-
 bool sendNotifications(char *label, camera_fb_t *fb) {
   preferences.begin("config");
   String det_name = preferences.getString("det_name", "");

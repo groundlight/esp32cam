@@ -656,13 +656,16 @@ void loop () {
   } else {
     last_upload_time = millis();
     debug("Taking a lap!");
-    // TODO: hide behind debug flag?
-    Serial.println("WiFi MAC Address:");
-    Serial.println(WiFi.macAddress());
+    debug("WiFi MAC Address:");
+    if (SHOW_LOGS) {
+      Serial.println(WiFi.macAddress());
+    }
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
-    Serial.println("Chip Rev:");
-    Serial.println(chip_info.revision);
+    debug("Chip Rev:");
+    if (SHOW_LOGS) {
+      Serial.println(chip_info.revision);
+    }
   }
 
   preferences.begin("config", true);

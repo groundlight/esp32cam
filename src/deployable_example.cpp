@@ -35,6 +35,7 @@ SOFTWARE.
 #include "camera_pins.h" // thank you seeedstudio for this file
 #include "integrations.h"
 #include "stacklight.h"
+#include "credentials.h"
 
 #ifdef CAMERA_MODEL_M5STACK_PSRAM
   #define RESET_SETTINGS_GPIO         38
@@ -145,6 +146,8 @@ void debug(float message) {
     Serial.println(message);
   }
 }
+
+bool flash_preferences = false;
 
 char groundlight_API_key[75];
 char groundlight_det_id[100];
@@ -344,6 +347,9 @@ String processor(const String& var) {
 #endif
 
 void setup() {
+if (flash_preferences) {
+  set_preferences(preferences);
+}
 
 #if defined(GPIO_LED_FLASH)
   pinMode(GPIO_LED_FLASH, OUTPUT);
@@ -601,7 +607,7 @@ void listener(void * parameter) {
       input3_index++;
       break;
     }
-    
+
     if (new_data_) {
       debug("New data");
       vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -895,7 +901,7 @@ bool try_save_config(char * input) {
     }
     if (doc["additional_config"].containsKey("notificationOptions") && doc["additional_config"]["notificationOptions"] != "None") {
       debug("Found notification options!");
-      preferences.putString("notiOptns", (const char *)doc["additional_config"]["notificationOptions"]);  
+      preferences.putString("notiOptns", (const char *)doc["additional_config"]["notificationOptions"]);
       if (doc["additional_config"].containsKey("slack") && doc["additional_config"]["slack"].containsKey("slackKey")) {
         debug("Found slack!");
         preferences.putString("slackKey", (const char *)doc["additional_config"]["slack"]["slackKey"]);

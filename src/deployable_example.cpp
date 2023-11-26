@@ -363,7 +363,20 @@ if (preload_credentials) {
   digitalWrite(LED_BUILTIN, HIGH);
 #endif
   Serial.begin(115200);
-  Serial.println("Edgelight waking up...");
+  Serial.println("Groundlight ESP32CAM waking up...");
+
+  esp_chip_info_t chip_info;
+  esp_chip_info(&chip_info);
+  debug("Chip Rev:");
+  if (SHOW_LOGS) {
+    Serial.println(chip_info.revision);
+  }
+
+  debug("WiFi MAC Address:");
+  if (SHOW_LOGS) {
+    Serial.println(WiFi.macAddress());
+  }
+
   xTaskCreate(
     listener,         // Function that should be called
     "Uart Listener",  // Name of the task (for debugging)
@@ -655,17 +668,6 @@ void loop () {
     return;
   } else {
     last_upload_time = millis();
-    debug("Taking a lap!");
-    debug("WiFi MAC Address:");
-    if (SHOW_LOGS) {
-      Serial.println(WiFi.macAddress());
-    }
-    esp_chip_info_t chip_info;
-    esp_chip_info(&chip_info);
-    debug("Chip Rev:");
-    if (SHOW_LOGS) {
-      Serial.println(chip_info.revision);
-    }
   }
 
   preferences.begin("config", true);

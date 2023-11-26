@@ -136,6 +136,16 @@ char groundlight_endpoint[60] = "api.groundlight.ai";
 Preferences preferences;
 
 const bool SHOW_LOGS = true;
+
+void debug_printf(const char *format, ...) {
+  if (SHOW_LOGS) {
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+  }
+}
+
 void debug(String message) {
   if (SHOW_LOGS) {
     Serial.println(message);
@@ -367,10 +377,11 @@ if (preload_credentials) {
 
   esp_chip_info_t chip_info;
   esp_chip_info(&chip_info);
-  debug("Chip Rev:");
-  if (SHOW_LOGS) {
-    Serial.println(chip_info.revision);
-  }
+//  debug("Chip Rev:");
+//  if (SHOW_LOGS) {
+//    Serial.println(chip_info.revision);
+//  }
+  debug_printf("ESP32 Chip Revision %d\n", chip_info.revision);
 
   debug("WiFi MAC Address:");
   if (SHOW_LOGS) {
@@ -582,7 +593,7 @@ if (preload_credentials) {
   // Photo Quality Settings
   // config.frame_size = FRAMESIZE_UXGA; // See here for a list of options and resolutions: https://github.com/espressif/esp32-camera/blob/master/driver/include/sensor.h#L84
   config.frame_size = FRAMESIZE_SXGA; // See here for a list of options and resolutions: https://github.com/espressif/esp32-camera/blob/master/driver/include/sensor.h#L84
-  config.jpeg_quality = 10;           // lower means higher quality
+  config.jpeg_quality = 5;           // lower means higher quality
   config.fb_count = 1;
 
   esp_err_t error_code = esp_camera_init(&config);

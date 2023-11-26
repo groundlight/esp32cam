@@ -514,9 +514,11 @@ if (preload_credentials) {
     preferences.getString("det_id", groundlight_det_id, 100);
     query_delay = preferences.getInt("query_delay", query_delay);
     
-    if (query_delay > 30) {
-      should_deep_sleep = true;
-    }
+// deep sleep appeares to be broken.  we shouldn't use it until it is fixed. 
+//    if (query_delay > 30) {
+//      should_deep_sleep = true;
+//    }
+
     WiFi.begin(ssid, password);
     wifi_connected = true;
   }

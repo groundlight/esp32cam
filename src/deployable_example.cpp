@@ -165,14 +165,16 @@ char password[100];
 int query_delay = 30; // 30 seconds
 int start_hr = 8;
 int end_hr = 17;
-bool should_deep_sleep = false;
+
+bool disable_deep_sleep_for_notifications = false;
+bool disable_deep_sleep_until_reset = false;
 float targetConfidence = 0.9;
 int retryLimit = 10;
 
 String queryResults = "NONE_YET";
 String queryID = "NONE_YET";
 char last_label[30] = "NONE_YET";
-bool wifi_connected = false;
+bool wifi_configured = false;
 
 String input = "";
 int last_upload_time = 0;
@@ -242,9 +244,16 @@ bool shouldDoNotification(String queryRes);
 bool sendNotifications(char *label, camera_fb_t *fb);
 bool notifyStacklight(const char * label);
 bool decodeWorkingHoursString(String working_hours);
+
+
+bool should_deep_sleep() {
+  return (query_delay > 29) && !disable_deep_sleep_for_notifications && !disable_deep_sleep_until_reset;
+} 
+
 void deep_sleep() {
   int time_elapsed = millis() - last_upload_time;
   int time_to_sleep = (query_delay - 10) * 1000000 - (1000 * time_elapsed);
+  debug_printf("Entering deep sleep for %d seconds\n", time_to_sleep / 1000000);
   esp_sleep_enable_timer_wakeup(time_to_sleep);
   esp_deep_sleep_start();
 }
@@ -359,9 +368,14 @@ String processor(const String& var) {
 #endif
 
 void setup() {
-if (preload_credentials) {
-  set_preferences(preferences);
-}
+
+  Serial.begin(115200);
+  Serial.println("Groundlight ESP32CAM waking up...");
+
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
+    Serial.println("Wakeup from deep sleep.  forcing restart to properly reset wifi module");
+    ESP.restart();
+  }
 
 #if defined(GPIO_LED_FLASH)
   pinMode(GPIO_LED_FLASH, OUTPUT);
@@ -371,8 +385,6 @@ if (preload_credentials) {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
 #endif
-  Serial.begin(115200);
-  Serial.println("Groundlight ESP32CAM waking up...");
 
   esp_chip_info_t chip_info;
   esp_chip_info(&chip_info);
@@ -402,6 +414,12 @@ if (preload_credentials) {
       debug_println("Reset settings!");
     }
   }
+
+  if (preload_credentials) {
+    set_preferences(preferences);
+  }
+
+
 #ifdef NEOPIXEL_PIN
   pixels.begin();
 
@@ -514,13 +532,8 @@ if (preload_credentials) {
     preferences.getString("det_id", groundlight_det_id, 100);
     query_delay = preferences.getInt("query_delay", query_delay);
     
-// deep sleep appeares to be broken.  we shouldn't use it until it is fixed. 
-//    if (query_delay > 30) {
-//      should_deep_sleep = true;
-//    }
-
     WiFi.begin(ssid, password);
-    wifi_connected = true;
+    wifi_configured = true;
   }
   if (preferences.isKey("ssid") && preferences.isKey("sl_uuid") && !preferences.isKey("sl_ip")) {
     debug_println("Initializing Stacklight through AP");
@@ -543,7 +556,6 @@ if (preload_credentials) {
     } else {
       debug_printf("Could not find stacklight\n");
     }
-
     WiFi.begin(ssid, password);
   }
   if (preferences.isKey("endpoint") && preferences.getString("endpoint", "") != "") {
@@ -641,7 +653,7 @@ void listener(void * parameter) {
       } else if(try_save_config(input3)) {
         debug_println("Saved config!");
         WiFi.begin(ssid, password);
-        wifi_connected = true;
+        wifi_configured = true;
       }
       input = "";
       input3_index = 0;
@@ -653,9 +665,9 @@ void listener(void * parameter) {
 
 void loop () {
 
-  if (!wifi_connected) {
+  if (!wifi_configured) {
     if (millis() > last_print_time + 1000) {
-      debug_println("Waiting for Credentials...");
+      debug_println("WiFi not started (no configuration found!)");
       last_print_time = millis();
     }
     vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -664,8 +676,8 @@ void loop () {
     last_print_time = millis();
   }
 
-    // normalize startup time to 10 seconds from deep sleep
-  if (should_deep_sleep) {
+    // normalize startup time to 10 seconds if we could be coming from sleep (delay is built into sleep delay)
+  if (should_deep_sleep()) {
     int time = millis();
     if (time < 10000) {
       vTaskDelay((10000 - time) / portTICK_PERIOD_MS);
@@ -674,7 +686,7 @@ void loop () {
     }
   }
 
-  if (millis() < last_upload_time + query_delay * 1000 && !should_deep_sleep) {
+  if (millis() < last_upload_time + query_delay * 1000 && !should_deep_sleep()) {
     return;
   } else {
     last_upload_time = millis();
@@ -702,7 +714,7 @@ void loop () {
         debug_println("Not in working hours!");
         last_upload_time = millis();
         preferences.end();
-        if (should_deep_sleep) {
+        if (should_deep_sleep()) {
           deep_sleep();
         }
         return;
@@ -745,7 +757,7 @@ void loop () {
       debug_println("Motion detected!");
     } else {
       esp_camera_fb_return(frame);
-      if (should_deep_sleep) {
+      if (should_deep_sleep()) {
         vTaskDelay(500 / portTICK_PERIOD_MS);
         deep_sleep();
       } else {
@@ -757,7 +769,7 @@ void loop () {
 
   // wait for wifi connection
   if (!WiFi.isConnected()) {
-    debug_printf("having difficulty connection to WIFI SSID %s...\n", ssid);
+    debug_printf("having difficulty connection to WIFI SSID %s... status code : %d\n", ssid, WiFi.status());
     for (int i = 0; i < 100 && !WiFi.isConnected(); i++) {
       vTaskDelay(100 / portTICK_PERIOD_MS);
     }
@@ -765,7 +777,7 @@ void loop () {
     if (WiFi.isConnected()) {
       debug_printf("WIFI connected to SSID %s\n", ssid);
   } else {
-      debug_printf("unable to connect to wifi! (skipping image query and looping again)\n");
+      debug_printf("unable to connect to wifi status code %d! (skipping image query and looping again)\n", WiFi.status());
       return;
   }
 
@@ -859,7 +871,7 @@ void loop () {
 
   esp_camera_fb_return(frame);
 
-  if (should_deep_sleep) {
+  if (should_deep_sleep()) {
     vTaskDelay(500 / portTICK_PERIOD_MS);
     deep_sleep();
   }
@@ -1045,6 +1057,8 @@ bool shouldDoNotification(String queryRes) {
     return false;
   }
   bool res = false;
+
+
   preferences.begin("config", true);
   if (preferences.isKey("notiOptns") && resultDoc["result"]["label"] != "QUERY_FAIL") {
     String notiOptns = preferences.getString("notiOptns", "None");
@@ -1072,16 +1086,19 @@ bool shouldDoNotification(String queryRes) {
           if (label == "PASS" || label == "YES") {
             debug_println("incrementing consecutive_pass");
             consecutive_pass++;
+            disable_deep_sleep_for_notifications = true;
           }
           else {
             consecutive_pass = 0;
             notification_sent = false;
+            disable_deep_sleep_for_notifications = false;
           }
         if (consecutive_pass >= consecutive_pass_limit) {
           if (notification_sent == false) {
-            debug_println("We should send a notification!!!!!!!!!!!");
+            debug_println("Consecutive pass criteria met.  Send notification!");
             res = true;
             notification_sent = true;
+            disable_deep_sleep_for_notifications = false;
         }
       }
     }
@@ -1181,7 +1198,10 @@ bool decodeWorkingHoursString(String working_hours) {
 }
 
 void try_answer_query(String input) {
-  should_deep_sleep = false;
+
+   // TODO: this is a blunt hammer but probably necessary for now
+  disable_deep_sleep_until_reset = true;
+
   if (input.indexOf("device_type") != -1) {
     Serial.println("Device Info:");
     Serial.println((StringSumHelper)"{\"name\":\"" + (String) NAME + "\",\"type\":\"Camera\",\"version\":\"" + VERSION + "\",\"mac_address\":\"" + WiFi.macAddress() + "\"}");

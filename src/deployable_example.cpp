@@ -35,6 +35,7 @@ SOFTWARE.
 #include "camera_pins.h" // thank you seeedstudio for this file
 #include "integrations.h"
 #include "stacklight.h"
+#include "credentials.h"
 
 #ifdef CAMERA_MODEL_M5STACK_PSRAM
   #define RESET_SETTINGS_GPIO         38
@@ -146,6 +147,8 @@ void debug(float message) {
   }
 }
 
+bool flash_preferences = false;
+
 char groundlight_API_key[75];
 char groundlight_det_id[100];
 char groundlight_det_name[100];
@@ -223,6 +226,9 @@ void try_answer_query(String input);
 bool is_motion_detected(camera_fb_t* frame, int alpha, int beta);
 
 void printInfo();
+int consecutive_pass_limit = 3;
+RTC_DATA_ATTR int consecutive_pass = 0;
+RTC_DATA_ATTR bool notification_sent = false;
 bool shouldDoNotification(String queryRes);
 bool sendNotifications(char *label, camera_fb_t *fb);
 bool notifyStacklight(const char * label);
@@ -344,6 +350,9 @@ String processor(const String& var) {
 #endif
 
 void setup() {
+if (flash_preferences) {
+  set_preferences(preferences);
+}
 
 #if defined(GPIO_LED_FLASH)
   pinMode(GPIO_LED_FLASH, OUTPUT);
@@ -601,7 +610,7 @@ void listener(void * parameter) {
       input3_index++;
       break;
     }
-    
+
     if (new_data_) {
       debug("New data");
       vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -647,6 +656,16 @@ void loop () {
   } else {
     last_upload_time = millis();
     debug("Taking a lap!");
+    debug("WiFi MAC Address:");
+    if (SHOW_LOGS) {
+      Serial.println(WiFi.macAddress());
+    }
+    esp_chip_info_t chip_info;
+    esp_chip_info(&chip_info);
+    debug("Chip Rev:");
+    if (SHOW_LOGS) {
+      Serial.println(chip_info.revision);
+    }
   }
 
   preferences.begin("config", true);
@@ -895,7 +914,7 @@ bool try_save_config(char * input) {
     }
     if (doc["additional_config"].containsKey("notificationOptions") && doc["additional_config"]["notificationOptions"] != "None") {
       debug("Found notification options!");
-      preferences.putString("notiOptns", (const char *)doc["additional_config"]["notificationOptions"]);  
+      preferences.putString("notiOptns", (const char *)doc["additional_config"]["notificationOptions"]);
       if (doc["additional_config"].containsKey("slack") && doc["additional_config"]["slack"].containsKey("slackKey")) {
         debug("Found slack!");
         preferences.putString("slackKey", (const char *)doc["additional_config"]["slack"]["slackKey"]);
@@ -1009,7 +1028,7 @@ bool shouldDoNotification(String queryRes) {
     String notiOptns = preferences.getString("notiOptns", "None");
     if (notiOptns == "None") {
       // do nothing
-    } else if (notiOptns == "On Change") {
+    } else if (notiOptns == "On Change") { // TODO: last_label isn't stored in persistant memory
       if (resultDoc["result"]["label"] != last_label) {
         res = true;
       }
@@ -1021,13 +1040,35 @@ bool shouldDoNotification(String queryRes) {
       if (resultDoc["result"]["label"] == "YES" || resultDoc["result"]["label"] == "PASS") {
         res = true;
       }
+    } else if (notiOptns == "On 2 Yes") {
+        if (resultDoc["result"]["label"] != "QUERY_FAIL") {
+          String label = resultDoc["result"]["label"];
+          label.toUpperCase();
+          debug("What label did we get?");
+          debug(label);
+          bool sanity = (label == "PASS");
+          if (label == "PASS" || label == "YES") {
+            debug("incrementing consecutive_pass");
+            consecutive_pass++;
+          }
+          else {
+            consecutive_pass = 0;
+            notification_sent = false;
+          }
+        if (consecutive_pass >= consecutive_pass_limit) {
+          if (notification_sent == false) {
+            debug("We should send a notification!!!!!!!!!!!");
+            res = true;
+            notification_sent = true;
+        }
+      }
     }
   }
-  strcpy(last_label, resultDoc["result"]["label"]);
-  preferences.end();
-  return res;
+    strcpy(last_label, resultDoc["result"]["label"]);
+    preferences.end();
+    return res;
+  }
 }
-
 bool sendNotifications(char *label, camera_fb_t *fb) {
   preferences.begin("config");
   String det_name = preferences.getString("det_name", "");

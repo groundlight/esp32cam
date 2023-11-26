@@ -400,6 +400,7 @@ void setup() {
     1,                // Task priority
     NULL              // Task handle
   );
+
   if (RESET_SETTINGS_GPIO != -1) {
     if (RESET_SETTINGS_GPIO_DEFAULT == LOW) {
       pinMode(RESET_SETTINGS_GPIO, INPUT_PULLDOWN);
@@ -1199,8 +1200,10 @@ bool decodeWorkingHoursString(String working_hours) {
 
 void try_answer_query(String input) {
 
-   // TODO: this is a blunt hammer but probably necessary for now
+   // this is a blunt hammer but maybe necessary
+   // should only get called if we are communicating via serial with the device
   disable_deep_sleep_until_reset = true;
+  Serial.println("WARNING! Sleep is disabled until ESP.restart()");
 
   if (input.indexOf("device_type") != -1) {
     Serial.println("Device Info:");

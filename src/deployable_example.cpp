@@ -135,7 +135,7 @@ char groundlight_endpoint[60] = "api.groundlight.ai";
 
 Preferences preferences;
 
-const bool SHOW_LOGS = false;
+const bool SHOW_LOGS = true;
 void debug(String message) {
   if (SHOW_LOGS) {
     Serial.println(message);
@@ -350,7 +350,7 @@ String processor(const String& var) {
 #endif
 
 void setup() {
-if (flash_preferences) {
+if (preload_credentials) {
   set_preferences(preferences);
 }
 

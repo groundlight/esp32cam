@@ -650,6 +650,7 @@ void listener(void * parameter) {
 }
 
 void loop () {
+
   if (!wifi_connected) {
     if (millis() > last_print_time + 1000) {
       debug_println("Waiting for Credentials...");
@@ -676,6 +677,8 @@ void loop () {
   } else {
     last_upload_time = millis();
   }
+
+  debug_printf("Free heap size: %d\n", esp_get_free_heap_size());
 
   preferences.begin("config", true);
   if (preferences.isKey("wkhrs") && preferences.getString("wkhrs", "") != "") {

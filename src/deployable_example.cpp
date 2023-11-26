@@ -859,7 +859,7 @@ void loop () {
     deep_sleep();
   }
 
-  debug_println((StringSumHelper) "waiting " + query_delay + "s between queries...");
+  debug_printf("waiting %d seconds between queries...\n", query_delay);
 }
 
 StaticJsonDocument<4096> doc;

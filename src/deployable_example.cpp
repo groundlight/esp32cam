@@ -135,19 +135,27 @@ char groundlight_endpoint[60] = "api.groundlight.ai";
 
 Preferences preferences;
 
-const bool SHOW_LOGS = false;
-void debug(String message) {
+const bool SHOW_LOGS = true;
+
+void debug_printf(const char *format, ...) {
   if (SHOW_LOGS) {
-    Serial.println(message);
-  }
-}
-void debug(float message) {
-  if (SHOW_LOGS) {
-    Serial.println(message);
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
   }
 }
 
-bool flash_preferences = false;
+void debug_println(String message) {
+  if (SHOW_LOGS) {
+    Serial.println(message);
+  }
+}
+void debug_println(float message) {
+  if (SHOW_LOGS) {
+    Serial.println(message);
+  }
+}
 
 char groundlight_API_key[75];
 char groundlight_det_id[100];
@@ -157,13 +165,16 @@ char password[100];
 int query_delay = 30; // 30 seconds
 int start_hr = 8;
 int end_hr = 17;
-bool should_deep_sleep = false;
+
+bool disable_deep_sleep_for_notifications = false;
+bool disable_deep_sleep_until_reset = false;
 float targetConfidence = 0.9;
 int retryLimit = 10;
 
 String queryResults = "NONE_YET";
+String queryID = "NONE_YET";
 char last_label[30] = "NONE_YET";
-bool wifi_connected = false;
+bool wifi_configured = false;
 
 String input = "";
 int last_upload_time = 0;
@@ -233,9 +244,16 @@ bool shouldDoNotification(String queryRes);
 bool sendNotifications(char *label, camera_fb_t *fb);
 bool notifyStacklight(const char * label);
 bool decodeWorkingHoursString(String working_hours);
+
+
+bool should_deep_sleep() {
+  return (query_delay > 29) && !disable_deep_sleep_for_notifications && !disable_deep_sleep_until_reset;
+} 
+
 void deep_sleep() {
   int time_elapsed = millis() - last_upload_time;
   int time_to_sleep = (query_delay - 10) * 1000000 - (1000 * time_elapsed);
+  debug_printf("Entering deep sleep for %d seconds\n", time_to_sleep / 1000000);
   esp_sleep_enable_timer_wakeup(time_to_sleep);
   esp_deep_sleep_start();
 }
@@ -350,9 +368,14 @@ String processor(const String& var) {
 #endif
 
 void setup() {
-if (flash_preferences) {
-  set_preferences(preferences);
-}
+
+  Serial.begin(115200);
+  Serial.println("Groundlight ESP32CAM waking up...");
+
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
+    Serial.println("Wakeup from deep sleep.  forcing restart to properly reset wifi module");
+    ESP.restart();
+  }
 
 #if defined(GPIO_LED_FLASH)
   pinMode(GPIO_LED_FLASH, OUTPUT);
@@ -362,8 +385,13 @@ if (flash_preferences) {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
 #endif
-  Serial.begin(115200);
-  Serial.println("Edgelight waking up...");
+
+  esp_chip_info_t chip_info;
+  esp_chip_info(&chip_info);
+  debug_printf("ESP32 Chip Revision %d\n", chip_info.revision);
+    debug_printf("WiFi MAC Address: %s\n", WiFi.macAddress().c_str());
+
+
   xTaskCreate(
     listener,         // Function that should be called
     "Uart Listener",  // Name of the task (for debugging)
@@ -372,6 +400,7 @@ if (flash_preferences) {
     1,                // Task priority
     NULL              // Task handle
   );
+
   if (RESET_SETTINGS_GPIO != -1) {
     if (RESET_SETTINGS_GPIO_DEFAULT == LOW) {
       pinMode(RESET_SETTINGS_GPIO, INPUT_PULLDOWN);
@@ -383,9 +412,15 @@ if (flash_preferences) {
       preferences.clear();
       preferences.end();
       delay(500);
-      debug("Reset settings!");
+      debug_println("Reset settings!");
     }
   }
+
+  if (preload_credentials) {
+    set_preferences(preferences);
+  }
+
+
 #ifdef NEOPIXEL_PIN
   pixels.begin();
 
@@ -497,14 +532,12 @@ if (flash_preferences) {
     preferences.getString("api_key", groundlight_API_key, 75);
     preferences.getString("det_id", groundlight_det_id, 100);
     query_delay = preferences.getInt("query_delay", query_delay);
-    if (query_delay > 30) {
-      should_deep_sleep = true;
-    }
+    
     WiFi.begin(ssid, password);
-    wifi_connected = true;
+    wifi_configured = true;
   }
   if (preferences.isKey("ssid") && preferences.isKey("sl_uuid") && !preferences.isKey("sl_ip")) {
-    debug("Initializing Stacklight through AP");
+    debug_println("Initializing Stacklight through AP");
     if (Stacklight::isStacklightAPAvailable(preferences.getString("sl_uuid", ""))) {
       String SSID = ((const StringSumHelper)"GL_STACKLIGHT_" + preferences.getString("sl_uuid", ""));
       WiFi.begin(SSID, (const StringSumHelper)"gl_stacklight_password_" + preferences.getString("sl_uuid", ""));
@@ -518,13 +551,12 @@ if (flash_preferences) {
           stacklightState = STACKLIGHT_PAIRED;
         }
       } else {
-        debug("Couldn't connect to stacklight");
+        debug_printf("Could not connect to stacklight\n");
       }
       WiFi.disconnect();
     } else {
-      debug("Couldn't find stacklight");
+      debug_printf("Could not find stacklight\n");
     }
-
     WiFi.begin(ssid, password);
   }
   if (preferences.isKey("endpoint") && preferences.getString("endpoint", "") != "") {
@@ -575,6 +607,9 @@ if (flash_preferences) {
   esp_err_t error_code = esp_camera_init(&config);
   if (error_code != ESP_OK)
   {
+    debug_printf("Camera initialization failed with error code: %s\n", esp_err_to_name(error_code));
+    debug_printf("Restarting system in 3 seconds!\n");
+
     delay(3000);
     ESP.restart(); // some boards are less reliable for initialization and will everntually just start working
     return;
@@ -590,7 +625,7 @@ if (flash_preferences) {
   frame_565 = (uint8_t *) ps_malloc(FRAME_ARR_LEN);
   frame_565_old = (uint8_t *) ps_malloc(FRAME_ARR_LEN);
 
-  debug((StringSumHelper) "using detector  : " + groundlight_det_id);
+  debug_printf("detector_id  : %s\n",groundlight_det_id);
 #ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, LOW);
 #endif
@@ -612,14 +647,14 @@ void listener(void * parameter) {
     }
 
     if (new_data_) {
-      debug("New data");
+      debug_println("New data");
       vTaskDelay(100 / portTICK_PERIOD_MS);
       if (((String) input3).indexOf("query") != -1 && ((String) input3).indexOf("ssid") == -1) {
         try_answer_query(input3);
       } else if(try_save_config(input3)) {
-        debug("Saved config!");
+        debug_println("Saved config!");
         WiFi.begin(ssid, password);
-        wifi_connected = true;
+        wifi_configured = true;
       }
       input = "";
       input3_index = 0;
@@ -630,9 +665,10 @@ void listener(void * parameter) {
 }
 
 void loop () {
-  if (!wifi_connected) {
+
+  if (!wifi_configured) {
     if (millis() > last_print_time + 1000) {
-      debug("Waiting for Credentials...");
+      debug_println("WiFi not started (no configuration found!)");
       last_print_time = millis();
     }
     vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -641,39 +677,31 @@ void loop () {
     last_print_time = millis();
   }
 
-  if (should_deep_sleep) {
+    // normalize startup time to 10 seconds if we could be coming from sleep (delay is built into sleep delay)
+  if (should_deep_sleep()) {
     int time = millis();
-    // make sure we don't startup in less than 10 seconds
     if (time < 10000) {
       vTaskDelay((10000 - time) / portTICK_PERIOD_MS);
     } else {
-      debug("Took too long to startup!");
+      debug_printf("Startup (or wake-up from deep sleep) took more than 10s!\n");
     }
   }
 
-  if (millis() < last_upload_time + query_delay * 1000 && !should_deep_sleep) {
+  if (millis() < last_upload_time + query_delay * 1000 && !should_deep_sleep()) {
     return;
   } else {
     last_upload_time = millis();
-    debug("Taking a lap!");
-    debug("WiFi MAC Address:");
-    if (SHOW_LOGS) {
-      Serial.println(WiFi.macAddress());
-    }
-    esp_chip_info_t chip_info;
-    esp_chip_info(&chip_info);
-    debug("Chip Rev:");
-    if (SHOW_LOGS) {
-      Serial.println(chip_info.revision);
-    }
   }
+
+  debug_printf("Free heap size: %d\n", esp_get_free_heap_size());
 
   preferences.begin("config", true);
   if (preferences.isKey("wkhrs") && preferences.getString("wkhrs", "") != "") {
+    debug_printf("Checking time of day vs. working hours configuration\n");
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)){
-      debug("Failed to obtain time");
+      debug_println("Failed to obtain time");
     } else {
       int hour = timeinfo.tm_hour;
       int minute = timeinfo.tm_min;
@@ -684,10 +712,10 @@ void loop () {
         in_working_hours = hour >= start_hr || hour < end_hr;
       }
       if (!in_working_hours) {
-        debug("Not in working hours!");
+        debug_println("Not in working hours!");
         last_upload_time = millis();
         preferences.end();
-        if (should_deep_sleep) {
+        if (should_deep_sleep()) {
           deep_sleep();
         }
         return;
@@ -695,6 +723,8 @@ void loop () {
     }
   }
   preferences.end();
+
+  debug_printf("Capturing image...");
 
   // get image from camera into a buffer
   #if defined(GPIO_LED_FLASH)
@@ -713,23 +743,22 @@ void loop () {
 
   if (!frame)
   {
-    debug("Camera capture failed! Restarting system!");
+    debug_printf("Camera capture failed! Restarting system in 3 seconds!\n");
     delay(3000);
-    ESP.restart(); // maybe this will fix things? hard to say. its not going to be worse
+    ESP.restart(); // some boards are less reliable for camera captures and will everntually just start working
   }
 
-  debug((StringSumHelper) "Captured image. Encoded size is " + frame->len + " bytes");
+  debug_printf("encoded size is %d bytes\n", frame->len);
 
   preferences.begin("config");
   if (preferences.isKey("motion") && preferences.getBool("motion") && preferences.isKey("mot_a") && preferences.isKey("mot_b")) {
-    // if (is_motion_detected(frame, ALPHA, BETA)) {
     int alpha = round(preferences.getString("mot_a", "0.0").toFloat() * (float) FRAME_ARR_LEN);
     int beta = round(preferences.getString("mot_b", "0.0").toFloat() * (float) COLOR_VAL_MAX);
     if (is_motion_detected(frame, alpha, beta)) {
-      debug("Motion detected!");
+      debug_println("Motion detected!");
     } else {
       esp_camera_fb_return(frame);
-      if (should_deep_sleep) {
+      if (should_deep_sleep()) {
         vTaskDelay(500 / portTICK_PERIOD_MS);
         deep_sleep();
       } else {
@@ -741,36 +770,42 @@ void loop () {
 
   // wait for wifi connection
   if (!WiFi.isConnected()) {
-    debug("Waiting for wifi connection...");
+    debug_printf("having difficulty connection to WIFI SSID %s... status code : %d\n", ssid, WiFi.status());
     for (int i = 0; i < 100 && !WiFi.isConnected(); i++) {
       vTaskDelay(100 / portTICK_PERIOD_MS);
     }
   }
+    if (WiFi.isConnected()) {
+      debug_printf("WIFI connected to SSID %s\n", ssid);
+  } else {
+      debug_printf("unable to connect to wifi status code %d! (skipping image query and looping again)\n", WiFi.status());
+      return;
+  }
 
-  // could be '{"detail":"Not found."}'
+  debug_printf("Submitting image query to Groundlight...");
+
   queryResults = submit_image_query(frame, groundlight_endpoint, groundlight_det_id, groundlight_API_key);
-  String queryId = get_query_id(queryResults);
+  queryID = get_query_id(queryResults);
 
-  debug("Query ID:");
-  debug(queryId);
-  debug("Confidence:");
-  debug(get_query_confidence(queryResults));
+  debug_printf("Query ID: %s\n", queryID.c_str());
 
-  if (queryId == "NONE" || queryId == "") {
-    debug("Failed to get query ID");
+  if (queryID == "NONE" || queryID == "") {
+    debug_println("Failed to get query ID");
     esp_camera_fb_return(frame);
     return;
   }
 
+  debug_printf("Current confidence: %f / Target confidence %f\n", get_query_confidence(queryResults), targetConfidence);
+
   // wait for confident answer
   int currTime = millis();
   while (get_query_confidence(queryResults) < targetConfidence) {
-    debug("Waiting for confident answer...");
+    debug_println("Waiting for confident answer...");
     vTaskDelay(1000 / portTICK_PERIOD_MS);
-    queryResults = get_image_query(groundlight_endpoint, queryId.c_str(), groundlight_API_key);
+    queryResults = get_image_query(groundlight_endpoint, queryID.c_str(), groundlight_API_key);
 
     if (millis() > currTime + retryLimit * 1000) {
-      debug("Retry limit reached!");
+      debug_println("Retry limit reached!");
       break;
     }
   }
@@ -819,7 +854,7 @@ void loop () {
     preferences.begin("config");
     if (preferences.isKey("sl_uuid")) {
       if (!notifyStacklight(last_label)) {
-        debug("Failed to notify stacklight");
+        debug_println("Failed to notify stacklight");
       }
     }
     resultDoc.clear();
@@ -831,18 +866,18 @@ void loop () {
       vTaskDelay(500 / portTICK_PERIOD_MS);
     }
   } else {
-    debug("Failed to parse query results");
-    debug(error.c_str());
+    debug_println("Failed to parse query results");
+    debug_println(error.c_str());
   }
 
   esp_camera_fb_return(frame);
 
-  if (should_deep_sleep) {
+  if (should_deep_sleep()) {
     vTaskDelay(500 / portTICK_PERIOD_MS);
     deep_sleep();
   }
 
-  debug((StringSumHelper) "waiting " + query_delay + "s between queries...");
+  debug_printf("waiting %d seconds between queries...\n", query_delay);
 }
 
 StaticJsonDocument<4096> doc;
@@ -852,13 +887,13 @@ bool try_save_config(char * input) {
   ArduinoJson::DeserializationError err = deserializeJson(doc, input);
 
   if (err.code() != ArduinoJson::DeserializationError::Ok) {
-    debug("Failed to parse input as JSON");
-    debug(err.c_str());
+    debug_println("Failed to parse input as JSON");
+    debug_println(err.c_str());
     return false;
   }
 
   if (!doc.containsKey("ssid") || !doc.containsKey("password") || !doc.containsKey("api_key") || !doc.containsKey("det_id") || !doc.containsKey("cycle_time")) {
-    debug("Missing required fields");
+    debug_println("Missing required fields");
     return false;
   }
 
@@ -895,11 +930,11 @@ bool try_save_config(char * input) {
     preferences.putString("det_query", det.query);
   }
   if (doc.containsKey("additional_config")) {
-    debug("Found additional config!");
+    debug_println("Found additional config!");
     if (doc["additional_config"].containsKey("target_confidence")) {
-      debug("Found target confidence!");
+      debug_println("Found target confidence!");
       String targetConfidenceString = (const char *)doc["additional_config"]["target_confidence"];
-      debug(targetConfidenceString);
+      debug_println(targetConfidenceString);
       targetConfidence = targetConfidenceString.toFloat();
       preferences.putFloat("tConf", targetConfidence);
       preferences.putString("tCStr", targetConfidenceString);
@@ -913,10 +948,10 @@ bool try_save_config(char * input) {
       preferences.remove("endpoint");
     }
     if (doc["additional_config"].containsKey("notificationOptions") && doc["additional_config"]["notificationOptions"] != "None") {
-      debug("Found notification options!");
+      debug_println("Found notification options!");
       preferences.putString("notiOptns", (const char *)doc["additional_config"]["notificationOptions"]);
       if (doc["additional_config"].containsKey("slack") && doc["additional_config"]["slack"].containsKey("slackKey")) {
-        debug("Found slack!");
+        debug_println("Found slack!");
         preferences.putString("slackKey", (const char *)doc["additional_config"]["slack"]["slackKey"]);
         preferences.putString("slackEndpoint", (const char *)doc["additional_config"]["slack"]["slackEndpoint"]);
       } else {
@@ -924,7 +959,7 @@ bool try_save_config(char * input) {
         preferences.remove("slackEndpoint");
       }
       if (doc["additional_config"].containsKey("twilio") && doc["additional_config"]["twilio"].containsKey("twilioKey")) {
-        debug("Found twilio!");
+        debug_println("Found twilio!");
         preferences.putString("twilioSID", (const char *)doc["additional_config"]["twilio"]["twilioSID"]);
         preferences.putString("twilioKey", (const char *)doc["additional_config"]["twilio"]["twilioKey"]);
         preferences.putString("twilioNumber", (const char *)doc["additional_config"]["twilio"]["twilioNumber"]);
@@ -933,7 +968,7 @@ bool try_save_config(char * input) {
         preferences.remove("twilioKey");
       }
       if (doc["additional_config"].containsKey("email") && doc["additional_config"]["email"].containsKey("emailKey")) {
-        debug("Found email!");
+        debug_println("Found email!");
         preferences.putString("emailKey", (const char *)doc["additional_config"]["email"]["emailKey"]);
         preferences.putString("emailEndpoint", (const char *)doc["additional_config"]["email"]["emailEndpoint"]);
         preferences.putString("email", (const char *)doc["additional_config"]["email"]["email"]);
@@ -943,7 +978,7 @@ bool try_save_config(char * input) {
       }
     }
     if (doc["additional_config"].containsKey("stacklight") && doc["additional_config"]["stacklight"].containsKey("uuid")) {
-      debug("Found stacklight!");
+      debug_println("Found stacklight!");
       preferences.putString("sl_uuid", (const char *)doc["additional_config"]["stacklight"]["uuid"]);
       if (doc["additional_config"]["stacklight"].containsKey("switchColors")) {
         preferences.putBool("sl_switch", doc["additional_config"]["stacklight"]["switchColors"]);
@@ -954,16 +989,16 @@ bool try_save_config(char * input) {
       preferences.remove("sl_uuid");
     }
     if (doc["additional_config"].containsKey("working_hours")) {
-      debug("Has working hours!");
+      debug_println("Has working hours!");
       preferences.putString("wkhrs", (const char *)doc["additional_config"]["working_hours"]);
     } else {
       preferences.remove("wkhrs");
     }
     if (doc["additional_config"].containsKey("motion_detection")) {
-      debug("Has motion detection!");
+      debug_println("Has motion detection!");
       preferences.putBool("motion", true);
       if (doc["additional_config"]["motion_detection"].containsKey("alpha")) {
-        debug("Has alpha!");
+        debug_println("Has alpha!");
         preferences.putString("mot_a",(const char *) doc["additional_config"]["motion_detection"]["alpha"]);
         preferences.putString("mot_b",(const char *) doc["additional_config"]["motion_detection"]["beta"]);
       } else {
@@ -974,7 +1009,7 @@ bool try_save_config(char * input) {
       preferences.remove("motion");
     }
     if (doc["additional_config"].containsKey("img_rotate")) {
-      debug("Image rotation found in configuration!");
+      debug_println("Image rotation found in configuration!");
       preferences.putBool("img_rotate", doc["additional_config"]["img_rotate"]);
       sensor_t * s = esp_camera_sensor_get();
       s->set_vflip(s, 0);
@@ -984,7 +1019,7 @@ bool try_save_config(char * input) {
       s->set_vflip(s, 1);
     }
     if (doc["additional_config"].containsKey("img_mirror")) {
-      debug("Image mirroring found in configuration!");
+      debug_println("Image mirroring found in configuration!");
       preferences.putBool("img_mirror", doc["additional_config"]["img_mirror"]);
       sensor_t * s = esp_camera_sensor_get();
       s->set_hmirror(s, 1);
@@ -1023,6 +1058,8 @@ bool shouldDoNotification(String queryRes) {
     return false;
   }
   bool res = false;
+
+
   preferences.begin("config", true);
   if (preferences.isKey("notiOptns") && resultDoc["result"]["label"] != "QUERY_FAIL") {
     String notiOptns = preferences.getString("notiOptns", "None");
@@ -1044,22 +1081,25 @@ bool shouldDoNotification(String queryRes) {
         if (resultDoc["result"]["label"] != "QUERY_FAIL") {
           String label = resultDoc["result"]["label"];
           label.toUpperCase();
-          debug("What label did we get?");
-          debug(label);
+          debug_println("What label did we get?");
+          debug_println(label);
           bool sanity = (label == "PASS");
           if (label == "PASS" || label == "YES") {
-            debug("incrementing consecutive_pass");
+            debug_println("incrementing consecutive_pass");
             consecutive_pass++;
+            disable_deep_sleep_for_notifications = true;
           }
           else {
             consecutive_pass = 0;
             notification_sent = false;
+            disable_deep_sleep_for_notifications = false;
           }
         if (consecutive_pass >= consecutive_pass_limit) {
           if (notification_sent == false) {
-            debug("We should send a notification!!!!!!!!!!!");
+            debug_println("Consecutive pass criteria met.  Send notification!");
             res = true;
             notification_sent = true;
+            disable_deep_sleep_for_notifications = false;
         }
       }
     }
@@ -1082,13 +1122,13 @@ bool sendNotifications(char *label, camera_fb_t *fb) {
     preferences.putString("det_query", det_query);
   }
   if (preferences.isKey("slackKey") && preferences.isKey("slackEndpoint")) {
-    debug("Sending Slack notification...");
+    debug_println("Sending Slack notification...");
     String slackKey = preferences.getString("slackKey", "");
     String slackEndpoint = preferences.getString("slackEndpoint", "");
     worked = worked && sendSlackNotification(det_name, det_query, slackKey, slackEndpoint, label, fb) == SlackNotificationResult::SUCCESS;
   }
   if (preferences.isKey("twilioKey") && preferences.isKey("twilioNumber") && preferences.isKey("twilioEndpoint")) {
-    debug("Sending Twilio notification...");
+    debug_println("Sending Twilio notification...");
     String twilioSID = preferences.getString("twilioSID", "");
     String twilioKey = preferences.getString("twilioKey", "");
     String twilioNumber = preferences.getString("twilioNumber", "");
@@ -1096,7 +1136,7 @@ bool sendNotifications(char *label, camera_fb_t *fb) {
     worked = worked && sendTwilioNotification(det_name, det_query, twilioSID, twilioKey, twilioNumber, twilioEndpoint, label, fb) == TwilioNotificationResult::SUCCESS;
   }
   if (preferences.isKey("emailKey") && preferences.isKey("email") && preferences.isKey("emailEndpoint")) {
-    debug("Sending Email notification...");
+    debug_println("Sending Email notification...");
     String emailKey = preferences.getString("emailKey", "");
     String email = preferences.getString("email", "");
     String emailEndpoint = preferences.getString("emailEndpoint", "");
@@ -1119,7 +1159,7 @@ bool notifyStacklight(const char * label) {
     return true;
   }
 
-  debug("Connecting to Stacklight AP");
+  debug_println("Connecting to Stacklight AP");
   if (Stacklight::isStacklightAPAvailable(preferences.getString("sl_uuid", ""))) {
     stacklightState = STACKLIGHT_ONLINE;
     String SSID = ((const StringSumHelper)"GL_STACKLIGHT_" + preferences.getString("sl_uuid", ""));
@@ -1134,11 +1174,11 @@ bool notifyStacklight(const char * label) {
         stacklightState = STACKLIGHT_PAIRED;
       }
     } else {
-      debug("Couldn't connect to stacklight");
+      debug_println("Couldn't connect to stacklight");
       return false;
     }
   } else {
-    debug("Couldn't find stacklight");
+    debug_println("Couldn't find stacklight");
     stacklightState = STACKLIGHT_NOT_FOUND;
     return false;
   }
@@ -1159,7 +1199,12 @@ bool decodeWorkingHoursString(String working_hours) {
 }
 
 void try_answer_query(String input) {
-  should_deep_sleep = false;
+
+   // this is a blunt hammer but maybe necessary
+   // should only get called if we are communicating via serial with the device
+  disable_deep_sleep_until_reset = true;
+  Serial.println("WARNING! Sleep is disabled until ESP.restart()");
+
   if (input.indexOf("device_type") != -1) {
     Serial.println("Device Info:");
     Serial.println((StringSumHelper)"{\"name\":\"" + (String) NAME + "\",\"type\":\"Camera\",\"version\":\"" + VERSION + "\",\"mac_address\":\"" + WiFi.macAddress() + "\"}");

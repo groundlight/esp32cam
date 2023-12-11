@@ -551,11 +551,11 @@ void setup() {
           stacklightState = STACKLIGHT_PAIRED;
         }
       } else {
-        debug_printf("Could not connect to stacklight\n");
+        debug_printf("Could not connect to stacklight : %s\n", SSID.c_str());
       }
       WiFi.disconnect();
     } else {
-      debug_printf("Could not find stacklight\n");
+      debug_printf("Could not find stacklight : %s\n", preferences.getString("sl_uuid", "").c_str());
     }
     WiFi.begin(ssid, password);
   }

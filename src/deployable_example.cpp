@@ -536,7 +536,15 @@ void setup() {
     WiFi.begin(ssid, password);
     wifi_configured = true;
   }
+
+  if wifi_configured = false {
+    debug_println("No wifi configuration found!.  Use configuration tool or add default credentials in credentials.h!  Restarting!");
+    ESP.restart();
+  }
+
   if (preferences.isKey("ssid") && preferences.isKey("sl_uuid") && !preferences.isKey("sl_ip")) {
+
+    WiFi.disconnect();
     debug_println("Initializing Stacklight through AP");
     if (Stacklight::isStacklightAPAvailable(preferences.getString("sl_uuid", ""))) {
       String SSID = ((const StringSumHelper)"GL_STACKLIGHT_" + preferences.getString("sl_uuid", ""));
@@ -549,16 +557,18 @@ void setup() {
         if (res != "") {
           preferences.putString("sl_ip", res);
           stacklightState = STACKLIGHT_PAIRED;
+          debug_printf("Stacklight %s initialized at sl ip %s\n", preferences.getString("sl_uuid", "").c_str(), res.c_str());
         }
       } else {
-        debug_printf("Could not connect to stacklight\n");
+        debug_printf("Could not connect to stacklight : %s\n", SSID.c_str());
       }
       WiFi.disconnect();
     } else {
-      debug_printf("Could not find stacklight\n");
+      debug_printf("Could not find stacklight : %s\n", preferences.getString("sl_uuid", "").c_str());
     }
     WiFi.begin(ssid, password);
   }
+
   if (preferences.isKey("endpoint") && preferences.getString("endpoint", "") != "") {
     preferences.getString("endpoint", groundlight_endpoint, 60);
   }

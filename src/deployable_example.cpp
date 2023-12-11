@@ -537,11 +537,6 @@ void setup() {
     wifi_configured = true;
   }
 
-  if wifi_configured = false {
-    debug_println("No wifi configuration found!.  Use configuration tool or add default credentials in credentials.h!  Restarting!");
-    ESP.restart();
-  }
-
   if (preferences.isKey("ssid") && preferences.isKey("sl_uuid") && !preferences.isKey("sl_ip")) {
 
     WiFi.disconnect();

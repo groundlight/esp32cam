@@ -35,7 +35,10 @@ SOFTWARE.
 #include "camera_pins.h" // thank you seeedstudio for this file
 #include "integrations.h"
 #include "stacklight.h"
-#include "credentials.h"
+
+#ifdef PRELOADED_CREDENTIALS
+  #include "credentials.h"
+#endif
 
 #ifdef CAMERA_MODEL_M5STACK_PSRAM
   #define RESET_SETTINGS_GPIO         38
@@ -416,9 +419,9 @@ void setup() {
     }
   }
 
-  if (preload_credentials) {
+  #ifdef PRELOADED_CREDENTIALS
     set_preferences(preferences);
-  }
+  #endif
 
 
 #ifdef NEOPIXEL_PIN

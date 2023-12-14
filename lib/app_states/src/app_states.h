@@ -52,3 +52,27 @@ String notificationStateToString (NotificationState state) {
       return "UNKNOWN";
   }
 }
+
+/**
+ * @brief A class to lock the ESP32 frame buffer
+ *
+ * This class is used to lock the ESP32 frame buffer. It is used mainly for RAII, so that the frame buffer is properly released when the object goes out of scope.
+ * It's not a true lock, the pointer to the frame is freely accessbile
+ *
+ * @todo Implement this class
+ */
+class EspFrameLock {
+  public:
+    camera_fb_t* frame = NULL;
+
+    EspFrameLock() {
+      frame = esp_camera_fb_get();
+    }
+
+    ~EspFrameLock() {
+      esp_camera_fb_return(frame);
+      delete frame;
+    }
+     EspFrameLock& operator=(const EspFrameLock&) = delete; // disallow assignment
+     EspFrameLock(const EspFrameLock&) = delete; // disallow copying
+};

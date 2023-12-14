@@ -61,7 +61,6 @@ QueryState queryState = WAITING_TO_QUERY;
 NotificationState notificationState = NOTIFICATION_NOT_ATTEMPTED;
 StacklightState stacklightState = STACKLIGHT_NOT_FOUND;
 
-camera_fb_t *frame = NULL;
 int *last_frame_buffer = NULL;
 char groundlight_endpoint[60] = "api.groundlight.ai";
 
@@ -664,33 +663,28 @@ void loop () {
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   #endif
 
-  // TODO: figure out why we need to capture twice to get the latest image?
-  frame = esp_camera_fb_get();
-  // Testing how to get the latest image
-  esp_camera_fb_return(frame);
-  frame = esp_camera_fb_get();
+  EspFrameLock frameLock;
 
   #if defined(GPIO_LED_FLASH)
     digitalWrite(GPIO_LED_FLASH, LOW);
   #endif
 
-  if (!frame)
+  if (!frameLock.frame)
   {
     debug_printf("Camera capture failed! Restarting system in 3 seconds!\n");
     delay(3000);
     ESP.restart(); // some boards are less reliable for camera captures and will everntually just start working
   }
 
-  debug_printf("encoded size is %d bytes\n", frame->len);
+  debug_printf("encoded size is %d bytes\n", frameLock.frame->len);
 
   preferences.begin("config");
   if (preferences.isKey("motion") && preferences.getBool("motion") && preferences.isKey("mot_a") && preferences.isKey("mot_b")) {
     int alpha = round(preferences.getString("mot_a", "0.0").toFloat() * (float) FRAME_ARR_LEN);
     int beta = round(preferences.getString("mot_b", "0.0").toFloat() * (float) COLOR_VAL_MAX);
-    if (is_motion_detected(frame, alpha, beta)) {
+    if (is_motion_detected(frameLock.frame, alpha, beta)) {
       debug_println("Motion detected!");
     } else {
-      esp_camera_fb_return(frame);
       if (should_deep_sleep()) {
         vTaskDelay(500 / portTICK_PERIOD_MS);
         deep_sleep();
@@ -717,14 +711,13 @@ void loop () {
 
   debug_printf("Submitting image query to Groundlight...");
 
-  queryResults = submit_image_query(frame, groundlight_endpoint, groundlight_det_id, groundlight_API_key);
+  queryResults = submit_image_query(frameLock.frame, groundlight_endpoint, groundlight_det_id, groundlight_API_key);
   queryID = get_query_id(queryResults);
 
   debug_printf("Query ID: %s\n", queryID.c_str());
 
   if (queryID == "NONE" || queryID == "") {
     debug_println("Failed to get query ID");
-    esp_camera_fb_return(frame);
     return;
   }
 
@@ -778,7 +771,7 @@ void loop () {
       }
     }
     if (shouldDoNotification(queryResults)) {
-      if (sendNotifications(last_label, frame)) {
+      if (sendNotifications(last_label, frameLock.frame)) {
         notificationState = NOTIFICATIONS_SENT;
       } else {
         notificationState = NOTIFICATION_ATTEMPT_FAILED;
@@ -802,8 +795,6 @@ void loop () {
     debug_println("Failed to parse query results");
     debug_println(error.c_str());
   }
-
-  esp_camera_fb_return(frame);
 
   if (should_deep_sleep()) {
     vTaskDelay(500 / portTICK_PERIOD_MS);

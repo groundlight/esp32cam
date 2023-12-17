@@ -11,7 +11,6 @@
 
 
 void set_preferences(Preferences preferences);
-bool preload_credentials = false;
 
 void set_preferences(Preferences preferences) {
     // A non-exhaustive list of preferences for the ESP32

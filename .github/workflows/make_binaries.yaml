@@ -29,13 +29,12 @@ jobs:
 
       - name: Copy binaries to /firmware
         run: bash copy_firmware.sh
-             ls firmware
 
       - name: Upload binaries for use in release step if needed
         uses: actions/upload-artifact@v3
         with:
           name: firmware
-          path: firmware
+          path: ./firmware
 
 
   deploy_release:

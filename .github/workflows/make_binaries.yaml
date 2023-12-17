@@ -23,6 +23,9 @@ jobs:
       - name: Install PlatformIO Core
         run: pip install --upgrade platformio
 
+      - name: Create credentials.h for build 
+        run: cp src/credentials_template.h src/credentials.h
+
       - name: Build PlatformIO Project
         run: pio run
 

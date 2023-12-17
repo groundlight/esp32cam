@@ -371,7 +371,8 @@ void setup() {
 
   Serial.begin(115200);
   Serial.println("Groundlight ESP32CAM waking up...");
-
+ 
+ 
   if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
     Serial.println("Wakeup from deep sleep.  forcing restart to properly reset wifi module");
     ESP.restart();
@@ -389,8 +390,9 @@ void setup() {
   esp_chip_info_t chip_info;
   esp_chip_info(&chip_info);
   debug_printf("ESP32 Chip Revision %d\n", chip_info.revision);
-    debug_printf("WiFi MAC Address: %s\n", WiFi.macAddress().c_str());
-
+  debug_printf("WiFi MAC Address: %s\n", WiFi.macAddress().c_str());
+  
+  debug_printf("Firmware : %s built on %s at %s\n", NAME, __DATE__, __TIME__);
 
   xTaskCreate(
     listener,         // Function that should be called
@@ -1112,6 +1114,9 @@ bool shouldDoNotification(String queryRes) {
     strcpy(last_label, resultDoc["result"]["label"]);
     preferences.end();
     return res;
+  }
+  else {
+    return false;
   }
 }
 bool sendNotifications(char *label, camera_fb_t *fb) {

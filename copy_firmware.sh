@@ -7,4 +7,5 @@ do
     cp $f/firmware.bin ../../firmware/firmware_$f.bin
 done
 echo "Contents of firmware directory:"
-ls -l ./firmware
+cd ../../
+ls -l firmware

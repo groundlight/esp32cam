@@ -1,7 +1,16 @@
 #include <Preferences.h>
 
+
+/*  template file for preloading credentials instead of reading from the file system 
+ *  only applicable for [env:demo-unit-preloaded]
+ *
+ *  to use this file, copy this template to "credentials.h" and fill in the applicable values.  
+ *  the list below is non-exhaustive and additional options can be added as needed.
+ *  this will override anything in the file system on every startup.
+*/
+
+
 void set_preferences(Preferences preferences);
-bool preload_credentials = false;
 
 void set_preferences(Preferences preferences) {
     // A non-exhaustive list of preferences for the ESP32

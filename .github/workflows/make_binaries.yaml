@@ -2,8 +2,6 @@ name: PlatformIO CI
 
 on:
   push:
-    branches:
-      - main
 
 jobs:
   build:
@@ -23,8 +21,18 @@ jobs:
       - name: Install PlatformIO Core
         run: pip install --upgrade platformio
 
+      - name: Create credentials.h for build 
+        run: cp src/credentials_template.h src/credentials.h
+
       - name: Build PlatformIO Project
         run: pio run
+
+
+  deploy_release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
 
       - name: Copy binaries to /firmware
         run: bash copy_firmware.sh

@@ -34,7 +34,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: firmware
-          path: firmware/* 
+          path: firmware
 
 
   deploy_release:
@@ -51,8 +51,8 @@ jobs:
 
       - name: Create release and upload binary
         run: |
-          gh release create v0.0.${{github.run_number}} firmware/*
           ls firmware
+          gh release create v0.0.${{github.run_number}} firmware/*
         env:
           GITHUB_TOKEN: ${{ github.TOKEN }}
         shell: bash

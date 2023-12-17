@@ -30,9 +30,6 @@ jobs:
       - name: Copy binaries to /firmware
         run: bash copy_firmware.sh
 
-      - name: List workspace directory
-        run: ls -la
-
       - name: Upload binaries for use in release step if needed
         uses: actions/upload-artifact@v3
         with:
@@ -55,10 +52,9 @@ jobs:
       - name: List workspace directory
         run: ls -la
 
-      - name: Create release and upload binary
+      - name: Create release and upload binaries
         run: |
-          ls firmware
-#          gh release create v0.0.${{github.run_number}} firmware/*
+          gh release create v0.0.${{github.run_number}} *.bin
         env:
           GITHUB_TOKEN: ${{ github.TOKEN }}
         shell: bash

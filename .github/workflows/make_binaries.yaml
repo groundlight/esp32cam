@@ -52,7 +52,7 @@ jobs:
       - name: Create release and upload binary
         run: |
           ls firmware
-          gh release create v0.0.${{github.run_number}} firmware/*
+#          gh release create v0.0.${{github.run_number}} firmware/*
         env:
           GITHUB_TOKEN: ${{ github.TOKEN }}
         shell: bash

@@ -349,6 +349,7 @@ String processor(const String& var) {
   // String out = String();
   String out = "";
   // if (var == "ssid") return String(ssid);
+  // update data filled the form chart and store in preferences locally. 
   if (var == "ssid") out = ssid;
   else if (var == "password") out = password;
   else if (var == "det_id") out = groundlight_det_id;
@@ -368,12 +369,26 @@ String processor(const String& var) {
   else if (var == "twilio_token" && preferences.isKey("twilioKey")) out = preferences.getString("twilioKey", "");
   else if (var == "twilio_number" && preferences.isKey("twilioNumber")) out = preferences.getString("twilioNumber", "");
   else if (var == "twilio_recipient" && preferences.isKey("twilioEndpoint")) out = preferences.getString("twilioEndpoint", "");
+  else if (var == "autoconfig" && preferences.isKey("autoconfig")) out = preferences.getString("autoconfig", "");
   preferences.end();
   return out;
   // return var;
 }
 #endif
-
+//define a auto configuration method:
+void performAutoConfig(AsyncWebServerRequest *request) {
+  Serial.println("Running autoconfig..."); 
+    // Check for required parameters and if autoconfig is enabled
+    if (request->hasParam("autoconfig") &&
+        request->hasParam("ssid") && !request->getParam("ssid")->value().isEmpty() &&
+        request->hasParam("pw") && !request->getParam("pw")->value().isEmpty() &&
+        request->hasParam("api_key") && !request->getParam("api_key")->value().isEmpty()) {
+        // debug only:
+        Serial.println("Autoconfig is enabled.");  
+        // Auto-fill logic starts here 
+        // preferences.putInt("query_delay", 10);  // Default value in seconds
+}
+}
 void setup() {
 
   Serial.begin(115200);
@@ -458,11 +473,14 @@ void setup() {
   // Send web page with input fields to client
   // at http://192.168.4.1/
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html, processor);
-  });
+    //call autoConfig function:
+    performAutoConfig(request);
+    request->send_P(200, "text/html", index_html, processor); 
+  }); 
 
   server.on("/config", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    preferences.begin("config", false);
+    //TODO: set preferences to true? 
+    preferences.begin("config", false);  
     if (request->hasParam("ssid") && request->getParam("ssid")->value() != "") {
       preferences.putString("ssid", request->getParam("ssid")->value());
       strcpy(ssid, request->getParam("ssid")->value().c_str());
@@ -527,7 +545,10 @@ void setup() {
     if (request->hasParam("twilio_recipient") && request->getParam("twilio_recipient")->value() != "") {
       preferences.putString("twilioEndpoint", request->getParam("twilio_recipient")->value());
     }
-    // request->send(200, "text/html", "Configuration sent to your ESP Camera<br><a href=\"/\">Return to Home Page</a>");
+    if (request->hasParam("autoconfig") && request->getParam("autoconfig")->value() != "") {
+      preferences.putString("autoconfig", request->getParam("autoconfig")->value());
+    }
+    request->send(200, "text/html", "Configuration sent to your ESP Camera<br><a href=\"/\">Return to Home Page</a>");
     request->send_P(200, "text/html", sent_html);
     preferences.end();
   });

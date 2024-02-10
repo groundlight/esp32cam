@@ -6,3 +6,5 @@
 .DS_Store
 
 src/credentials.h
+
+config/

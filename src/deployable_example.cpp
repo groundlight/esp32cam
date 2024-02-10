@@ -1,28 +1,28 @@
-/*
+// /*
 
-Groundlight deployable example of image classification from a visual query. Provided under MIT License below:
+// Groundlight deployable example of image classification from a visual query. Provided under MIT License below:
 
-Copyright (c) 2023 Groundlight, Inc.
+// Copyright (c) 2023 Groundlight, Inc.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-*/
+// */
 
 #include <Arduino.h>
 #include <Preferences.h>
@@ -35,6 +35,8 @@ SOFTWARE.
 #include "camera_pins.h" // thank you seeedstudio for this file
 #include "integrations.h"
 #include "stacklight.h"
+
+#include "../config/api_keys.h" //testing only
 
 #ifdef PRELOADED_CREDENTIALS
   #include "credentials.h"
@@ -169,7 +171,7 @@ int query_delay = 30; // 30 seconds
 int start_hr = 8;
 int end_hr = 17;
 
-bool disable_deep_sleep_for_notifications = false;
+bool disable_deep_sleep_for_notifications = false; 
 bool disable_deep_sleep_until_reset = false;
 float targetConfidence = 0.9;
 int retryLimit = 10;
@@ -374,21 +376,26 @@ String processor(const String& var) {
   return out;
   // return var;
 }
-#endif
-//define a auto configuration method:
+
+// Web form auto configuration method:
 void performAutoConfig(AsyncWebServerRequest *request) {
   Serial.println("Running autoconfig..."); 
-    // Check for required parameters and if autoconfig is enabled
+    // Check autoconfig parameter
     if (request->hasParam("autoconfig") &&
-        request->hasParam("ssid") && !request->getParam("ssid")->value().isEmpty() &&
-        request->hasParam("pw") && !request->getParam("pw")->value().isEmpty() &&
-        request->hasParam("api_key") && !request->getParam("api_key")->value().isEmpty()) {
-        // debug only:
-        Serial.println("Autoconfig is enabled.");  
-        // Auto-fill logic starts here 
-        // preferences.putInt("query_delay", 10);  // Default value in seconds
+      request->hasParam("ssid") && !request->getParam("ssid")->value().isEmpty() &&
+      request->hasParam("pw") && !request->getParam("pw")->value().isEmpty() &&
+      request->hasParam("api_key") && !request->getParam("api_key")->value().isEmpty()) {
+      // debug print:
+      Serial.println("Autoconfig is enabled.");  
+      // get_detector_by_name:
+      String detectorName = "ESP32-CAM-87E1AC";
+      // String metadataJson = get_detector_by_name()
+      // get the metadata, serialize it in json string;
+      // deserialize the json string, parse configs -> preferences library & server. 
 }
 }
+#endif
+
 void setup() {
 
   Serial.begin(115200);
@@ -474,7 +481,7 @@ void setup() {
   // at http://192.168.4.1/
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     //call autoConfig function:
-    performAutoConfig(request);
+    // performAutoConfig(request);
     request->send_P(200, "text/html", index_html, processor); 
   }); 
 
@@ -813,6 +820,29 @@ void loop () {
   }
     if (WiFi.isConnected()) {
       debug_printf("WIFI connected to SSID %s\n", ssid);
+      //Testing: 
+      const char* endpoint = "api.groundlight.ai";
+      const char* apiToken = API_TOKEN;
+      String detectors = get_detectors(endpoint, apiToken);
+      Serial.println(detectors);
+      //test:
+      detector_list det_list = get_detector_list(endpoint, apiToken);
+      Serial.println(det_list.size); //parsing succeeded. 
+      // Check if 'get_detector_by_list' is working: 
+      Serial.println(det_list.detectors[0].id);
+      
+      Serial.println(det_list.detectors[0].metadata); //succeeded!
+      //check if 'get_detector_by_id' is working: 
+      // const char* detector_id = det_list.detectors[0].id;
+      // detector det = get_detector_by_id(endpoint,detector_id,apiToken);
+      // Serial.println("get detector by id: ");
+      // Serial.print(det.name);//succeeded!
+      //check 'get_detector_by_name':
+      const char* detectorName = det_list.detectors[0].name;
+      detector det = get_detector_by_name(endpoint,detectorName,apiToken);
+      Serial.println("get detector id by name: ");
+      Serial.print(det.id);//succeeded!
+
   } else {
       debug_printf("unable to connect to wifi status code %d! (skipping image query and looping again)\n", WiFi.status());
       return;

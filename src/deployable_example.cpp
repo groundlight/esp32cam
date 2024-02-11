@@ -170,7 +170,7 @@ int start_hr = 8;
 int end_hr = 17;
 
 bool disable_deep_sleep_for_notifications = false;
-bool disable_deep_sleep_until_reset = false;
+bool disable_deep_sleep_until_reset = true; //for testing. 
 float targetConfidence = 0.9;
 int retryLimit = 10;
 

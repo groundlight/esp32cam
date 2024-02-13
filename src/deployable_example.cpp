@@ -33,10 +33,10 @@
 #include "groundlight.h"
 
 #include "camera_pins.h" // thank you seeedstudio for this file
-#include "integrations.h"
+#include "integrations.h" 
 #include "stacklight.h"
 
-#include "../config/api_keys.h" //testing only
+#include "../credentials/api_keys.h" //testing only
 
 #ifdef PRELOADED_CREDENTIALS
   #include "credentials.h"
@@ -172,7 +172,7 @@ int start_hr = 8;
 int end_hr = 17;
 
 bool disable_deep_sleep_for_notifications = false; 
-bool disable_deep_sleep_until_reset = false;
+bool disable_deep_sleep_until_reset = true; //true for testing
 float targetConfidence = 0.9;
 int retryLimit = 10;
 
@@ -376,24 +376,63 @@ String processor(const String& var) {
   return out;
   // return var;
 }
-
-// Web form auto configuration method:
 void performAutoConfig(AsyncWebServerRequest *request) {
-  Serial.println("Running autoconfig..."); 
-    // Check autoconfig parameter
-    if (request->hasParam("autoconfig") &&
-      request->hasParam("ssid") && !request->getParam("ssid")->value().isEmpty() &&
-      request->hasParam("pw") && !request->getParam("pw")->value().isEmpty() &&
-      request->hasParam("api_key") && !request->getParam("api_key")->value().isEmpty()) {
-      // debug print:
-      Serial.println("Autoconfig is enabled.");  
-      // get_detector_by_name:
-      String detectorName = "ESP32-CAM-87E1AC";
-      // String metadataJson = get_detector_by_name()
-      // get the metadata, serialize it in json string;
-      // deserialize the json string, parse configs -> preferences library & server. 
+  const char* detectorName = "cat"; //testing only 
+  //convert apiToken:
+  Serial.println("Auto config starts running.");//debug 
+  // String apiTokenString = API_TOKEN; 
+  const char* apiToken = API_TOKEN;
+  detector espCamDet = get_detector_by_name("api.groundlight.ai", detectorName, apiToken);
+  //parse det_id:
+  String esp_id = espCamDet.id; 
+  preferences.putString("det_id", esp_id);
+  Serial.println("Autofilled Det_id is: ");
+  Serial.println(esp_id); 
+  //parse metadata: 
+  String metadataString = espCamDet.metadata;
+  if (metadataString.length() > 0) {
+      // deserialze metadata:
+      DynamicJsonDocument metadataDoc(1024);
+      deserializeJson(metadataDoc, metadataString);
+      // if existed, e.g., parse det_id :
+      if (metadataDoc.containsKey("Query Delay (seconds)") &&!metadataDoc["Query Delay (seconds)"].isNull()){
+        int esp_query_delay = metadataDoc["Query Delay (seconds)"];
+        //debug:
+        Serial.println("Get query_delay from metadata:");
+        Serial.println(query_delay);
+        //put query_delay value in preferences:
+        preferences.putInt("query_delay", esp_query_delay);
+      }
+      //endpoint:
+      if (metadataDoc.containsKey("Endpoint") &&!metadataDoc["Endpoint"].isNull()){
+        String esp_endpoint = metadataDoc["Endpoint"];
+        //debug: 
+        Serial.println("Endpoint:");
+        Serial.println(esp_endpoint);
+        //store in preferences
+        preferences.putString("endpoint", esp_endpoint);
+      }
+      //target confidence: 
+      if(metadataDoc.containsKey("Target Confidence") &&!metadataDoc["Target Confidence"].isNull()){
+        float esp_tconf = metadataDoc["Target Confidence"];
+        //debug: 
+        Serial.println("target confidence:");
+        Serial.println(esp_tconf);
+        ////store in preferences
+        preferences.putFloat("tconf", esp_tconf);
+      }
+      //optional: motion alpha, motion beta, stacklight UUID
+  }
+
+  
+
+  // fill it in the form
+  //saving the form values to preferences, similar to the existing '/config' handling logic
 }
-}
+void autosimulation() {
+    Serial.println("test test test");
+  }
+
 #endif
 
 void setup() {
@@ -480,18 +519,26 @@ void setup() {
   // Send web page with input fields to client
   // at http://192.168.4.1/
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    //call autoConfig function:
-    // performAutoConfig(request);
     request->send_P(200, "text/html", index_html, processor); 
   }); 
 
   server.on("/config", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    //TODO: set preferences to true? 
-    preferences.begin("config", false);  
+    //test:
+    performAutoConfig(request);
+
+    //IF: 
+    //check: run autoconfig or not
+    if (request->hasParam("ssid", true) && request->hasParam("pw", true) && request->hasParam("api_key", true)) {
+        performAutoConfig(request); 
+        Serial.println("auto config runs!");
+    } 
+
+    //ELSE: 
+    preferences.begin("config", false);   //can write? 
     if (request->hasParam("ssid") && request->getParam("ssid")->value() != "") {
       preferences.putString("ssid", request->getParam("ssid")->value());
       strcpy(ssid, request->getParam("ssid")->value().c_str());
-    }
+    } 
     if (request->hasParam("pw") && request->getParam("pw")->value() != "") {
       preferences.putString("password", request->getParam("pw")->value());
       strcpy(password, request->getParam("pw")->value().c_str());
@@ -500,6 +547,9 @@ void setup() {
       preferences.putString("det_id", request->getParam("det_id")->value());
       strcpy(groundlight_det_id, request->getParam("det_id")->value().c_str());
     }
+    //request -hasparam check request has the key; request - get param check request has the value; 
+    //pref.putstring: put 'det_id' inside NVS where ssid is key; request ->getparam is value;
+    //copy value into 'groundlight_get_id" 
     if (request->hasParam("api_key") && request->getParam("api_key")->value() != "") {
       preferences.putString("api_key", request->getParam("api_key")->value());
       strcpy(groundlight_API_key, request->getParam("api_key")->value().c_str());
@@ -555,6 +605,7 @@ void setup() {
     if (request->hasParam("autoconfig") && request->getParam("autoconfig")->value() != "") {
       preferences.putString("autoconfig", request->getParam("autoconfig")->value());
     }
+  
     request->send(200, "text/html", "Configuration sent to your ESP Camera<br><a href=\"/\">Return to Home Page</a>");
     request->send_P(200, "text/html", sent_html);
     preferences.end();
@@ -820,7 +871,7 @@ void loop () {
   }
     if (WiFi.isConnected()) {
       debug_printf("WIFI connected to SSID %s\n", ssid);
-      //Testing: 
+      //Testing only: 
       const char* endpoint = "api.groundlight.ai";
       const char* apiToken = API_TOKEN;
       String detectors = get_detectors(endpoint, apiToken);
@@ -842,6 +893,10 @@ void loop () {
       detector det = get_detector_by_name(endpoint,detectorName,apiToken);
       Serial.println("get detector id by name: ");
       Serial.print(det.id);//succeeded!
+      
+      //deserialize matadata
+      String metadataString = det_list.detectors[0].metadata;
+      
 
   } else {
       debug_printf("unable to connect to wifi status code %d! (skipping image query and looping again)\n", WiFi.status());

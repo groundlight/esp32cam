@@ -397,15 +397,10 @@ void performAutoConfig(AsyncWebServerRequest *request){
     Serial.println("Error: Detector not found. Try connect to the previous configured detector.");
     return; 
   }
-  //testing 
-  Serial.println("the id of the esp camera detector is:");
-  Serial.println(esp_det.id);
-  //get det_id: 
-  preferences.putString("det_id", esp_det.id);
-  strcpy(groundlight_det_id, esp_det.id);
 
   //deserialize metadata: 
   String metadataStr = esp_det.metadata; 
+  Serial.println(esp_det.metadata);
 
   DynamicJsonDocument metadataDoc(1024);
 
@@ -418,33 +413,30 @@ void performAutoConfig(AsyncWebServerRequest *request){
   }
 
   // from metadata: get query_delay
-  if (metadataDoc.containsKey("Query Delay (seconds)")) {
+  if (metadataDoc.containsKey("Query Delay (seconds)") && !metadataDoc["Query Delay (seconds)"].isNull() && metadataDoc.containsKey("Target Confidence") && !metadataDoc["Target Confidence"].isNull()) {
+    preferences.putString("det_id", esp_det.id);
+    strcpy(groundlight_det_id, esp_det.id);
+
     query_delay = metadataDoc["Query Delay (seconds)"];
-    //
+    preferences.putInt("query_delay", query_delay);
     Serial.print(F("Query Delay: "));
     Serial.println(query_delay);
-    preferences.putInt("query_delay", query_delay);
-  } else {
-    Serial.println(F("Query Delay not found in metadata"));
-    return;
-  }
-  
-  //from metadata: get target confidence
-  if (metadataDoc.containsKey("Target Confidence")) {
-    targetConfidence = metadataDoc["Target Confidence"];//toFloat()?
-    //
+
+    targetConfidence = metadataDoc["Target Confidence"];
+    preferences.putFloat("tConf", targetConfidence);
     Serial.print(F("Target Confidence: "));
     Serial.println(targetConfidence);
-    preferences.putFloat("tConf", targetConfidence);
+
+
   } else {
-    Serial.println(F("Query Delay not found in metadata"));
+    Serial.println(F("Query Delay or Target confidence not found in metadata or no value stored in query delay."));
     return;
   }
-
-  //motion alpha
-  //motion beta
-  //SL UUID
-}
+    //optional: 
+    //motion alpha
+    //motion beta
+    //SL UUID
+} 
 
 #endif
 

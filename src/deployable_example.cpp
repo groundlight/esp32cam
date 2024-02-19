@@ -391,7 +391,7 @@ bool shouldPerformAutoConfig(AsyncWebServerRequest *request) {
 void performAutoConfig(AsyncWebServerRequest *request){
   const char* endpoint = groundlight_endpoint;
   const char* apiToken = API_TOKEN;
-  detector esp_det = get_detector_by_name(endpoint, "door", apiToken); // ESP32-CAM-87E1AC
+  detector esp_det = get_detector_by_name(endpoint, "ESP32-CAM-87E1AC", apiToken); // ESP32-CAM-87E1AC
   //error handling detector name doesn't exist 
   if (strcmp(esp_det.id, "NONE") == 0) {
     Serial.println("Error: Detector not found. Try connect to the previous configured detector.");

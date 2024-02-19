@@ -43,7 +43,6 @@ struct detector_list
   detector *detectors;
   uint size;
 };
-
 detector_list get_detector_list(const char *endpoint, const char *apiToken);
 String detector_to_string(detector d);
 detector get_detector_by_id(const char *endpoint, const char *detectorId, const char *apiToken);

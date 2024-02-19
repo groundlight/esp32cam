@@ -304,7 +304,7 @@ const char index_html[] PROGMEM = R"rawliteral(
     API Key: <input type="text" name="api_key" value="%api_key%">
     <label>
       Autoconfig
-      <input type="checkbox" name="autoconfig">
+      <input type="checkbox" name="autoconfig" value="true">
     </label>
     Detector Id: <input type="text" name="det_id" value="%det_id%">
     Query Delay (seconds): <input type="text" name="query_delay" value="%query_delay%">
@@ -351,7 +351,7 @@ String processor(const String& var) {
   // String out = String();
   String out = "";
   // if (var == "ssid") return String(ssid);
-  // update data filled the form chart and store in preferences locally. 
+  // Fetch previously saved data, filled the form chart and store in preference library. 
   if (var == "ssid") out = ssid;
   else if (var == "password") out = password;
   else if (var == "det_id") out = groundlight_det_id;
@@ -376,62 +376,75 @@ String processor(const String& var) {
   return out;
   // return var;
 }
-void performAutoConfig(AsyncWebServerRequest *request) {
-  const char* detectorName = "cat"; //testing only 
-  //convert apiToken:
-  Serial.println("Auto config starts running.");//debug 
-  // String apiTokenString = API_TOKEN; 
-  const char* apiToken = API_TOKEN;
-  detector espCamDet = get_detector_by_name("api.groundlight.ai", detectorName, apiToken);
-  //parse det_id:
-  String esp_id = espCamDet.id; 
-  preferences.putString("det_id", esp_id);
-  Serial.println("Autofilled Det_id is: ");
-  Serial.println(esp_id); 
-  //parse metadata: 
-  String metadataString = espCamDet.metadata;
-  if (metadataString.length() > 0) {
-      // deserialze metadata:
-      DynamicJsonDocument metadataDoc(1024);
-      deserializeJson(metadataDoc, metadataString);
-      // if existed, e.g., parse det_id :
-      if (metadataDoc.containsKey("Query Delay (seconds)") &&!metadataDoc["Query Delay (seconds)"].isNull()){
-        int esp_query_delay = metadataDoc["Query Delay (seconds)"];
-        //debug:
-        Serial.println("Get query_delay from metadata:");
-        Serial.println(query_delay);
-        //put query_delay value in preferences:
-        preferences.putInt("query_delay", esp_query_delay);
-      }
-      //endpoint:
-      if (metadataDoc.containsKey("Endpoint") &&!metadataDoc["Endpoint"].isNull()){
-        String esp_endpoint = metadataDoc["Endpoint"];
-        //debug: 
-        Serial.println("Endpoint:");
-        Serial.println(esp_endpoint);
-        //store in preferences
-        preferences.putString("endpoint", esp_endpoint);
-      }
-      //target confidence: 
-      if(metadataDoc.containsKey("Target Confidence") &&!metadataDoc["Target Confidence"].isNull()){
-        float esp_tconf = metadataDoc["Target Confidence"];
-        //debug: 
-        Serial.println("target confidence:");
-        Serial.println(esp_tconf);
-        ////store in preferences
-        preferences.putFloat("tconf", esp_tconf);
-      }
-      //optional: motion alpha, motion beta, stacklight UUID
-  }
 
-  
+//check if meet autoconfig requirment: 
+bool shouldPerformAutoConfig(AsyncWebServerRequest *request) {
+    bool autoconfigEnabled = request->hasParam("autoconfig");
+    bool ssidFilled = request->hasParam("ssid") && request->getParam("ssid")->value() != "";
+    bool passwordFilled = request->hasParam("pw") && request->getParam("pw")->value() != "";
+    bool apiKeyFilled = request->hasParam("api_key") && request->getParam("api_key")->value() != "";
 
-  // fill it in the form
-  //saving the form values to preferences, similar to the existing '/config' handling logic
+    return autoconfigEnabled && ssidFilled && passwordFilled && apiKeyFilled;
 }
-void autosimulation() {
-    Serial.println("test test test");
+
+//perform autoconfig:
+void performAutoConfig(AsyncWebServerRequest *request){
+  const char* endpoint = groundlight_endpoint;
+  const char* apiToken = API_TOKEN;
+  detector esp_det = get_detector_by_name(endpoint, "door", apiToken); // ESP32-CAM-87E1AC
+  //error handling detector name doesn't exist 
+  if (strcmp(esp_det.id, "NONE") == 0) {
+    Serial.println("Error: Detector not found. Try connect to the previous configured detector.");
+    return; 
   }
+  //testing 
+  Serial.println("the id of the esp camera detector is:");
+  Serial.println(esp_det.id);
+  //get det_id: 
+  preferences.putString("det_id", esp_det.id);
+  strcpy(groundlight_det_id, esp_det.id);
+
+  //deserialize metadata: 
+  String metadataStr = esp_det.metadata; 
+
+  DynamicJsonDocument metadataDoc(1024);
+
+  DeserializationError error = deserializeJson(metadataDoc, metadataStr);
+
+  if (error) {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.c_str());
+    return; 
+  }
+
+  // from metadata: get query_delay
+  if (metadataDoc.containsKey("Query Delay (seconds)")) {
+    query_delay = metadataDoc["Query Delay (seconds)"];
+    //
+    Serial.print(F("Query Delay: "));
+    Serial.println(query_delay);
+    preferences.putInt("query_delay", query_delay);
+  } else {
+    Serial.println(F("Query Delay not found in metadata"));
+    return;
+  }
+  
+  //from metadata: get target confidence
+  if (metadataDoc.containsKey("Target Confidence")) {
+    targetConfidence = metadataDoc["Target Confidence"];//toFloat()?
+    //
+    Serial.print(F("Target Confidence: "));
+    Serial.println(targetConfidence);
+    preferences.putFloat("tConf", targetConfidence);
+  } else {
+    Serial.println(F("Query Delay not found in metadata"));
+    return;
+  }
+
+  //motion alpha
+  //motion beta
+  //SL UUID
+}
 
 #endif
 
@@ -462,13 +475,13 @@ void setup() {
   
   debug_printf("Firmware : %s built on %s at %s\n", NAME, __DATE__, __TIME__);
 
-  xTaskCreate(
+  xTaskCreate( 
     listener,         // Function that should be called
     "Uart Listener",  // Name of the task (for debugging)
     10000,            // Stack size (bytes)
     NULL,             // Parameter to pass
     1,                // Task priority
-    NULL              // Task handle
+    NULL              // Task handle 
   );
 
   if (RESET_SETTINGS_GPIO != -1) {
@@ -523,18 +536,7 @@ void setup() {
   }); 
 
   server.on("/config", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    //test:
-    performAutoConfig(request);
-
-    //IF: 
-    //check: run autoconfig or not
-    if (request->hasParam("ssid", true) && request->hasParam("pw", true) && request->hasParam("api_key", true)) {
-        performAutoConfig(request); 
-        Serial.println("auto config runs!");
-    } 
-
-    //ELSE: 
-    preferences.begin("config", false);   //can write? 
+    preferences.begin("config", false); 
     if (request->hasParam("ssid") && request->getParam("ssid")->value() != "") {
       preferences.putString("ssid", request->getParam("ssid")->value());
       strcpy(ssid, request->getParam("ssid")->value().c_str());
@@ -543,70 +545,72 @@ void setup() {
       preferences.putString("password", request->getParam("pw")->value());
       strcpy(password, request->getParam("pw")->value().c_str());
     }
-    if (request->hasParam("det_id") && request->getParam("det_id")->value() != "") {
-      preferences.putString("det_id", request->getParam("det_id")->value());
-      strcpy(groundlight_det_id, request->getParam("det_id")->value().c_str());
-    }
-    //request -hasparam check request has the key; request - get param check request has the value; 
-    //pref.putstring: put 'det_id' inside NVS where ssid is key; request ->getparam is value;
-    //copy value into 'groundlight_get_id" 
     if (request->hasParam("api_key") && request->getParam("api_key")->value() != "") {
       preferences.putString("api_key", request->getParam("api_key")->value());
       strcpy(groundlight_API_key, request->getParam("api_key")->value().c_str());
     }
-    if (request->hasParam("query_delay") && request->getParam("query_delay")->value() != "") {
-      query_delay = request->getParam("query_delay")->value().toInt();
-      preferences.putInt("query_delay", query_delay);
+    
+    if (shouldPerformAutoConfig(request)){
+      performAutoConfig(request);
+    } else {
+      if (request->hasParam("det_id") && request->getParam("det_id")->value() != "") {
+        preferences.putString("det_id", request->getParam("det_id")->value());
+        strcpy(groundlight_det_id, request->getParam("det_id")->value().c_str());
+      }
+      if (request->hasParam("query_delay") && request->getParam("query_delay")->value() != "") {
+        query_delay = request->getParam("query_delay")->value().toInt();
+        preferences.putInt("query_delay", query_delay);
+      }
+      if (request->hasParam("endpoint") && request->getParam("endpoint")->value() != "") {
+        preferences.putString("endpoint", request->getParam("endpoint")->value());
+        strcpy(groundlight_endpoint, request->getParam("endpoint")->value().c_str());
+      }
+      if (request->hasParam("tConf") && request->getParam("tConf")->value() != "") {
+        targetConfidence = request->getParam("tConf")->value().toFloat();
+        preferences.putFloat("tConf", targetConfidence);
+      }
+      if (request->hasParam("mot_a") && request->getParam("mot_a")->value() != "") {
+        preferences.putString("mot_a", request->getParam("mot_a")->value());
+      }
+      if (request->hasParam("mot_b") && request->getParam("mot_b")->value() != "") {
+        preferences.putString("mot_b", request->getParam("mot_b")->value());
+      }
+      if (request->hasParam("sl_uuid") && request->getParam("sl_uuid")->value() != "") {
+        preferences.putString("sl_uuid", request->getParam("sl_uuid")->value());
+      }
+      if (request->hasParam("slack_url") && request->getParam("slack_url")->value() != "") {
+        preferences.putString("slack_url", request->getParam("slack_url")->value());
+      }
+      if (request->hasParam("email") && request->getParam("email")->value() != "") {
+        preferences.putString("email", request->getParam("email")->value());
+      }
+      if (request->hasParam("email_endpoint") && request->getParam("email_endpoint")->value() != "") {
+        preferences.putString("emailEndpoint", request->getParam("email_endpoint")->value());
+      }
+      if (request->hasParam("email_key") && request->getParam("email_key")->value() != "") {
+        preferences.putString("emailKey", request->getParam("email_key")->value());
+      }
+      if (request->hasParam("email_host") && request->getParam("email_host")->value() != "") {
+        preferences.putString("emailHost", request->getParam("email_host")->value());
+      }
+      if (request->hasParam("twilio_sid") && request->getParam("twilio_sid")->value() != "") {
+        preferences.putString("twilioSID", request->getParam("twilio_sid")->value());
+      }
+      if (request->hasParam("twilio_token") && request->getParam("twilio_token")->value() != "") {
+        preferences.putString("twilioKey", request->getParam("twilio_token")->value());
+      }
+      if (request->hasParam("twilio_number") && request->getParam("twilio_number")->value() != "") {
+        preferences.putString("twilioNumber", request->getParam("twilio_number")->value());
+      }
+      if (request->hasParam("twilio_recipient") && request->getParam("twilio_recipient")->value() != "") {
+        preferences.putString("twilioEndpoint", request->getParam("twilio_recipient")->value());
+      }
+      if (request->hasParam("autoconfig") && request->getParam("autoconfig")->value() != "") {
+        preferences.putString("autoconfig", request->getParam("autoconfig")->value());
+      }
+
     }
-    if (request->hasParam("endpoint") && request->getParam("endpoint")->value() != "") {
-      preferences.putString("endpoint", request->getParam("endpoint")->value());
-      strcpy(groundlight_endpoint, request->getParam("endpoint")->value().c_str());
-    }
-    if (request->hasParam("tConf") && request->getParam("tConf")->value() != "") {
-      targetConfidence = request->getParam("tConf")->value().toFloat();
-      preferences.putFloat("tConf", targetConfidence);
-    }
-    if (request->hasParam("mot_a") && request->getParam("mot_a")->value() != "") {
-      preferences.putString("mot_a", request->getParam("mot_a")->value());
-    }
-    if (request->hasParam("mot_b") && request->getParam("mot_b")->value() != "") {
-      preferences.putString("mot_b", request->getParam("mot_b")->value());
-    }
-    if (request->hasParam("sl_uuid") && request->getParam("sl_uuid")->value() != "") {
-      preferences.putString("sl_uuid", request->getParam("sl_uuid")->value());
-    }
-    if (request->hasParam("slack_url") && request->getParam("slack_url")->value() != "") {
-      preferences.putString("slack_url", request->getParam("slack_url")->value());
-    }
-    if (request->hasParam("email") && request->getParam("email")->value() != "") {
-      preferences.putString("email", request->getParam("email")->value());
-    }
-    if (request->hasParam("email_endpoint") && request->getParam("email_endpoint")->value() != "") {
-      preferences.putString("emailEndpoint", request->getParam("email_endpoint")->value());
-    }
-    if (request->hasParam("email_key") && request->getParam("email_key")->value() != "") {
-      preferences.putString("emailKey", request->getParam("email_key")->value());
-    }
-    if (request->hasParam("email_host") && request->getParam("email_host")->value() != "") {
-      preferences.putString("emailHost", request->getParam("email_host")->value());
-    }
-    if (request->hasParam("twilio_sid") && request->getParam("twilio_sid")->value() != "") {
-      preferences.putString("twilioSID", request->getParam("twilio_sid")->value());
-    }
-    if (request->hasParam("twilio_token") && request->getParam("twilio_token")->value() != "") {
-      preferences.putString("twilioKey", request->getParam("twilio_token")->value());
-    }
-    if (request->hasParam("twilio_number") && request->getParam("twilio_number")->value() != "") {
-      preferences.putString("twilioNumber", request->getParam("twilio_number")->value());
-    }
-    if (request->hasParam("twilio_recipient") && request->getParam("twilio_recipient")->value() != "") {
-      preferences.putString("twilioEndpoint", request->getParam("twilio_recipient")->value());
-    }
-    if (request->hasParam("autoconfig") && request->getParam("autoconfig")->value() != "") {
-      preferences.putString("autoconfig", request->getParam("autoconfig")->value());
-    }
-  
-    request->send(200, "text/html", "Configuration sent to your ESP Camera<br><a href=\"/\">Return to Home Page</a>");
+    // request->send(200, "text/html", "Configuration sent to your ESP Camera<br><a href=\"/\">Return to Home Page</a>");
     request->send_P(200, "text/html", sent_html);
     preferences.end();
   });
@@ -871,31 +875,16 @@ void loop () {
   }
     if (WiFi.isConnected()) {
       debug_printf("WIFI connected to SSID %s\n", ssid);
-      //Testing only: 
-      const char* endpoint = "api.groundlight.ai";
-      const char* apiToken = API_TOKEN;
-      String detectors = get_detectors(endpoint, apiToken);
-      Serial.println(detectors);
-      //test:
-      detector_list det_list = get_detector_list(endpoint, apiToken);
-      Serial.println(det_list.size); //parsing succeeded. 
-      // Check if 'get_detector_by_list' is working: 
-      Serial.println(det_list.detectors[0].id);
-      
-      Serial.println(det_list.detectors[0].metadata); //succeeded!
-      //check if 'get_detector_by_id' is working: 
-      // const char* detector_id = det_list.detectors[0].id;
-      // detector det = get_detector_by_id(endpoint,detector_id,apiToken);
-      // Serial.println("get detector by id: ");
-      // Serial.print(det.name);//succeeded!
-      //check 'get_detector_by_name':
-      const char* detectorName = det_list.detectors[0].name;
-      detector det = get_detector_by_name(endpoint,detectorName,apiToken);
-      Serial.println("get detector id by name: ");
-      Serial.print(det.id);//succeeded!
-      
-      //deserialize matadata
-      String metadataString = det_list.detectors[0].metadata;
+      // //TESTING ONLY: 
+      // const char* endpoint = "api.groundlight.ai";
+      // const char* apiToken = API_TOKEN;
+      // String detectors = get_detectors(endpoint, apiToken);
+      // Serial.println("detectors string:");
+      // Serial.println(detectors);
+      // const char* detectorName = "cat";
+      // detector det = get_detector_by_name(endpoint,detectorName,apiToken);
+      // Serial.println("get detector id by name: ");
+      // Serial.print(det.id);//succeeded!
       
 
   } else {

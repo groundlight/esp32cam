@@ -36,7 +36,7 @@
 #include "integrations.h" 
 #include "stacklight.h"
 
-#include "../credentials/api_keys.h" //testing only
+// #include "../credentials/api_keys.h" //testing only
 
 #ifdef PRELOADED_CREDENTIALS
   #include "credentials.h"
@@ -390,7 +390,7 @@ bool shouldPerformAutoConfig(AsyncWebServerRequest *request) {
 //perform autoconfig:
 void performAutoConfig(AsyncWebServerRequest *request){
   const char* endpoint = groundlight_endpoint;
-  const char* apiToken = API_TOKEN;
+  const char* apiToken = groundlight_API_key;
   detector esp_det = get_detector_by_name(endpoint, "ESP32-CAM-87E1AC", apiToken); // ESP32-CAM-87E1AC
   //error handling detector name doesn't exist 
   if (strcmp(esp_det.id, "NONE") == 0) {

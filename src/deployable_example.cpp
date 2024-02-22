@@ -36,8 +36,6 @@
 #include "integrations.h" 
 #include "stacklight.h"
 
-// #include "../credentials/api_keys.h" //testing only
-
 #ifdef PRELOADED_CREDENTIALS
   #include "credentials.h"
 #endif
@@ -388,8 +386,13 @@ bool shouldPerformAutoConfig(AsyncWebServerRequest *request) {
 void performAutoConfig(AsyncWebServerRequest *request){
   const char* endpoint = groundlight_endpoint;
   const char* apiToken = groundlight_API_key;
-  detector esp_det = get_detector_by_name(endpoint, "ESP32-CAM-87E1AC", apiToken); // ESP32-CAM-87E1AC
-  //error handling detector name doesn't exist 
+  // mac address to detectorName 
+  String mac = WiFi.macAddress();
+  mac.replace(":", "");
+  mac = mac.substring(6);
+  String esp_detector_name = (StringSumHelper) "ESP32-CAM-" + mac;
+  debug_printf("esp cam detector name:  %s\n",esp_detector_name.c_str());
+  detector esp_det = get_detector_by_name(endpoint, esp_detector_name.c_str(), apiToken); 
   if (strcmp(esp_det.id, "NONE") == 0) {
     Serial.println("Error: Detector not found. Try connect to the previous configured detector.");
     return; 
@@ -397,7 +400,6 @@ void performAutoConfig(AsyncWebServerRequest *request){
 
   //deserialize metadata: 
   String metadataStr = esp_det.metadata; 
-  Serial.println(esp_det.metadata);
 
   DynamicJsonDocument metadataDoc(1024);
 
@@ -710,8 +712,7 @@ void setup() {
   // alloc memory for 565 frames
   frame_565 = (uint8_t *) ps_malloc(FRAME_ARR_LEN);
   frame_565_old = (uint8_t *) ps_malloc(FRAME_ARR_LEN);
-
-  debug_printf("detector_id  : %s\n",groundlight_det_id);
+  
 #ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, LOW);
 #endif
@@ -864,16 +865,6 @@ void loop () {
   }
     if (WiFi.isConnected()) {
       debug_printf("WIFI connected to SSID %s\n", ssid);
-      // //TESTING ONLY: 
-      // const char* endpoint = "api.groundlight.ai";
-      // const char* apiToken = API_TOKEN;
-      // String detectors = get_detectors(endpoint, apiToken);
-      // Serial.println("detectors string:");
-      // Serial.println(detectors);
-      // const char* detectorName = "cat";
-      // detector det = get_detector_by_name(endpoint,detectorName,apiToken);
-      // Serial.println("get detector id by name: ");
-      // Serial.print(det.id);//succeeded!
       
 
   } else {

@@ -301,11 +301,8 @@ const char index_html[] PROGMEM = R"rawliteral(
   <form action="/config">
     WiFi SSID: <input type="text" name="ssid" value="%ssid%">
     WiFi Password: <input type="password" name="pw" value="%password%"> 
-    API Key: <input type="text" name="api_key" value="%api_key%">
-    <label>
-      Autoconfig
-      <input type="checkbox" name="autoconfig" value="true">
-    </label>
+    API Key: <input type="password" name="api_key" value="%api_key%">
+    Autoconfig: <input type="checkbox" name="autoconfig" value="true">
     Detector Id: <input type="text" name="det_id" value="%det_id%">
     Query Delay (seconds): <input type="text" name="query_delay" value="%query_delay%">
     Endpoint: <input type="text" name="endpoint" value="%endpoint%">

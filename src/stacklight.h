@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Arduino.h>
 #include "WiFi.h"
 #include <HTTPClient.h>
@@ -117,12 +119,12 @@ namespace Stacklight
 
     /**
      * @brief Try to connect to Stacklight AP and push WiFi credentials
-     * 
+     *
      * This happens over time, and not for initialization. Must be connected to the stacklight first.
-     * 
+     *
      * @param ssid WiFi SSID
      * @param password WiFi password
-     * 
+     *
      * @return Stacklight IP address (empty string if not connected)
     */
     String tryConnectToStacklight(const char * ssid, const char * password) {
@@ -133,18 +135,18 @@ namespace Stacklight
             vTaskDelay(1000 / portTICK_PERIOD_MS);
             pushWiFiCredToStacklight(ssid, password);
         }
-        
+
         return ip;
     }
 
     /**
      * @brief Try to connect to Stacklight AP and push WiFi credentials
-     * 
+     *
      * This is for initialization. Must be connected to the stacklight first.
-     * 
+     *
      * @param ssid WiFi SSID
      * @param password WiFi password
-     * 
+     *
      * @return Stacklight IP address (empty string if not connected)
     */
     String initStacklight(const char * ssid, const char * password, int retries = 10) {
@@ -183,4 +185,23 @@ namespace Stacklight
         }
         return ip;
     }
+}
+
+enum StacklightState {
+  STACKLIGHT_NOT_FOUND,
+  STACKLIGHT_ONLINE,
+  STACKLIGHT_PAIRED,
+};
+
+String stacklightStateToString (StacklightState state) {
+  switch (state) {
+    case STACKLIGHT_NOT_FOUND:
+      return "STACKLIGHT_NOT_FOUND";
+    case STACKLIGHT_ONLINE:
+      return "STACKLIGHT_ONLINE";
+    case STACKLIGHT_PAIRED:
+      return "STACKLIGHT_PAIRED";
+    default:
+      return "UNKNOWN";
+  }
 }

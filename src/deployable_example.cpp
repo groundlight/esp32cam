@@ -24,14 +24,15 @@ SOFTWARE.
 
 */
 
-#include <Arduino.h>
+
 #include <Preferences.h>
-#include "WiFi.h"
+#include <WiFi.h>
 #include <esp_camera.h>
 #include <time.h>
-#include "ArduinoJson.h"
-#include "groundlight.h"
+#include <ArduinoJson.h>
 
+#include "groundlight.h"
+#include "app_states.h"
 #include "camera_pins.h" // thank you seeedstudio for this file
 #include "integrations.h"
 #include "stacklight.h"
@@ -59,80 +60,10 @@ uint8_t *frame_565_old;
 #define ALPHA FRAME_ARR_LEN / ALPHA_DIVISOR
 #define BETA 20 // out of 31
 
-enum QueryState {
-  WAITING_TO_QUERY,
-  DNS_NOT_FOUND,
-  SSL_CONNECTION_FAILURE,
-  LAST_RESPONSE_PASS,
-  LAST_RESPONSE_FAIL,
-  LAST_RESPONSE_UNSURE,
-  NOT_AUTHENTICATED,
-};
-
-String queryStateToString (QueryState state) {
-  switch (state) {
-    case WAITING_TO_QUERY:
-      return "WAITING_TO_QUERY";
-    case SSL_CONNECTION_FAILURE:
-      return "CONNECTION_FAILURE";
-    case DNS_NOT_FOUND:
-      return "DNS_NOT_FOUND";
-    case LAST_RESPONSE_PASS:
-      return "LAST_RESPONSE_PASS";
-    case LAST_RESPONSE_FAIL:
-      return "LAST_RESPONSE_FAIL";
-    case LAST_RESPONSE_UNSURE:
-      return "LAST_RESPONSE_UNSURE";
-    case NOT_AUTHENTICATED:
-      return "NOT_AUTHENTICATED";
-    default:
-      return "UNKNOWN";
-  }
-}
-
-enum NotificationState {
-  NOTIFICATION_NOT_ATTEMPTED,
-  NOTIFICATIONS_SENT,
-  NOTIFICATION_ATTEMPT_FAILED,
-};
-
-String notificationStateToString (NotificationState state) {
-  switch (state) {
-    case NOTIFICATION_NOT_ATTEMPTED:
-      return "NOTIFICATION_NOT_ATTEMPTED";
-    case NOTIFICATIONS_SENT:
-      return "NOTIFICATIONS_SENT";
-    case NOTIFICATION_ATTEMPT_FAILED:
-      return "NOTIFICATION_ATTEMPT_FAILED";
-    default:
-      return "UNKNOWN";
-  }
-}
-
-enum StacklightState {
-  STACKLIGHT_NOT_FOUND,
-  STACKLIGHT_ONLINE,
-  STACKLIGHT_PAIRED,
-};
-
-String stacklightStateToString (StacklightState state) {
-  switch (state) {
-    case STACKLIGHT_NOT_FOUND:
-      return "STACKLIGHT_NOT_FOUND";
-    case STACKLIGHT_ONLINE:
-      return "STACKLIGHT_ONLINE";
-    case STACKLIGHT_PAIRED:
-      return "STACKLIGHT_PAIRED";
-    default:
-      return "UNKNOWN";
-  }
-}
-
 QueryState queryState = WAITING_TO_QUERY;
 NotificationState notificationState = NOTIFICATION_NOT_ATTEMPTED;
 StacklightState stacklightState = STACKLIGHT_NOT_FOUND;
 
-camera_fb_t *frame = NULL;
 int *last_frame_buffer = NULL;
 char groundlight_endpoint[60] = "api.groundlight.ai";
 
@@ -251,7 +182,7 @@ bool decodeWorkingHoursString(String working_hours);
 
 bool should_deep_sleep() {
   return (query_delay > 29) && !disable_deep_sleep_for_notifications && !disable_deep_sleep_until_reset;
-} 
+}
 
 void deep_sleep() {
   int time_elapsed = millis() - last_upload_time;
@@ -537,7 +468,7 @@ void setup() {
     preferences.getString("api_key", groundlight_API_key, 75);
     preferences.getString("det_id", groundlight_det_id, 100);
     query_delay = preferences.getInt("query_delay", query_delay);
-    
+
     WiFi.begin(ssid, password);
     wifi_configured = true;
   }
@@ -742,32 +673,28 @@ void loop () {
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   #endif
 
-  frame = esp_camera_fb_get();
-  // Testing how to get the latest image
-  esp_camera_fb_return(frame);
-  frame = esp_camera_fb_get();
+  EspFrameLock frameLock;
 
   #if defined(GPIO_LED_FLASH)
     digitalWrite(GPIO_LED_FLASH, LOW);
   #endif
 
-  if (!frame)
+  if (!frameLock.frame)
   {
     debug_printf("Camera capture failed! Restarting system in 3 seconds!\n");
     delay(3000);
     ESP.restart(); // some boards are less reliable for camera captures and will everntually just start working
   }
 
-  debug_printf("encoded size is %d bytes\n", frame->len);
+  debug_printf("encoded size is %d bytes\n", frameLock.frame->len);
 
   preferences.begin("config");
   if (preferences.isKey("motion") && preferences.getBool("motion") && preferences.isKey("mot_a") && preferences.isKey("mot_b")) {
     int alpha = round(preferences.getString("mot_a", "0.0").toFloat() * (float) FRAME_ARR_LEN);
     int beta = round(preferences.getString("mot_b", "0.0").toFloat() * (float) COLOR_VAL_MAX);
-    if (is_motion_detected(frame, alpha, beta)) {
+    if (is_motion_detected(frameLock.frame, alpha, beta)) {
       debug_println("Motion detected!");
     } else {
-      esp_camera_fb_return(frame);
       if (should_deep_sleep()) {
         vTaskDelay(500 / portTICK_PERIOD_MS);
         deep_sleep();
@@ -794,14 +721,13 @@ void loop () {
 
   debug_printf("Submitting image query to Groundlight...");
 
-  queryResults = submit_image_query(frame, groundlight_endpoint, groundlight_det_id, groundlight_API_key);
+  queryResults = submit_image_query(frameLock.frame, groundlight_endpoint, groundlight_det_id, groundlight_API_key);
   queryID = get_query_id(queryResults);
 
   debug_printf("Query ID: %s\n", queryID.c_str());
 
   if (queryID == "NONE" || queryID == "") {
     debug_println("Failed to get query ID");
-    esp_camera_fb_return(frame);
     return;
   }
 
@@ -855,7 +781,7 @@ void loop () {
       }
     }
     if (shouldDoNotification(queryResults)) {
-      if (sendNotifications(last_label, frame)) {
+      if (sendNotifications(last_label, frameLock.frame)) {
         notificationState = NOTIFICATIONS_SENT;
       } else {
         notificationState = NOTIFICATION_ATTEMPT_FAILED;
@@ -879,8 +805,6 @@ void loop () {
     debug_println("Failed to parse query results");
     debug_println(error.c_str());
   }
-
-  esp_camera_fb_return(frame);
 
   if (should_deep_sleep()) {
     vTaskDelay(500 / portTICK_PERIOD_MS);

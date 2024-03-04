@@ -409,7 +409,8 @@ void performAutoConfig(AsyncWebServerRequest *request){
   debug_printf("esp cam detector name:  %s\n",esp_detector_name.c_str());
   detector esp_det = get_detector_by_name(endpoint, esp_detector_name.c_str(), apiToken); 
   if (strcmp(esp_det.id, "NONE") == 0) {
-    Serial.println("Error: Detector not found. Try connect to the previous configured detector.");
+    preferences.putString("det_id", "DETECTOR NOT FOUND");
+    Serial.println("Error: Detector not found.");
     return; 
   }
   preferences.putString("det_id", esp_det.id);
@@ -456,8 +457,7 @@ void performAutoConfig(AsyncWebServerRequest *request){
   } else if (metadataDoc.containsKey("Stacklight UUID") && metadataDoc["Stacklight UUID"].isNull()){
     preferences.remove("sl_uuid");
   }
-
-  } 
+} 
 
 #endif
 

@@ -1,28 +1,28 @@
-// /*
+/*
 
-// Groundlight deployable example of image classification from a visual query. Provided under MIT License below:
+Groundlight deployable example of image classification from a visual query. Provided under MIT License below:
 
-// Copyright (c) 2023 Groundlight, Inc.
+Copyright (c) 2023 Groundlight, Inc.
 
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
-// */
+*/
 
 #include <Arduino.h>
 #include <Preferences.h>
@@ -33,7 +33,7 @@
 #include "groundlight.h"
 
 #include "camera_pins.h" // thank you seeedstudio for this file
-#include "integrations.h" 
+#include "integrations.h"
 #include "stacklight.h"
 
 #ifdef PRELOADED_CREDENTIALS
@@ -169,8 +169,8 @@ int query_delay = 30; // 30 seconds
 int start_hr = 8;
 int end_hr = 17;
 
-bool disable_deep_sleep_for_notifications = false; 
-bool disable_deep_sleep_until_reset = true; //true for testing
+bool disable_deep_sleep_for_notifications = false;
+bool disable_deep_sleep_until_reset = true;
 float targetConfidence = 0.9;
 int retryLimit = 10;
 
@@ -275,10 +275,9 @@ const char index_html[] PROGMEM = R"rawliteral(
     form {
       display: flex;
       flex-direction: column;
-      /* place-items: center normal; */
-      align-items: center; 
+      place-items: center normal;
     }
-    input, #motionSettings, #stacklightSettings {
+    input {
       width: 80vw;
       margin: 10px;
     }
@@ -361,7 +360,6 @@ String processor(const String& var) {
   // String out = String();
   String out = "";
   // if (var == "ssid") return String(ssid);
-  // Fetch previously saved data, filled the form chart and store in preference library. 
   if (var == "ssid") out = ssid;
   else if (var == "password") out = password;
   else if (var == "det_id") out = groundlight_det_id;
@@ -372,22 +370,12 @@ String processor(const String& var) {
   else if (var == "mot_a" && preferences.isKey("mot_a")) out = String(preferences.getString("mot_a", "0.0"));
   else if (var == "mot_b" && preferences.isKey("mot_b")) out = String(preferences.getString("mot_b", "0.0"));
   else if (var == "sl_uuid" && preferences.isKey("sl_uuid")) out = preferences.getString("sl_uuid", "");
-  else if (var == "slack_url" && preferences.isKey("slack_url")) out = preferences.getString("slack_url", "");
-  else if (var == "email" && preferences.isKey("email")) out = preferences.getString("email", "");
-  else if (var == "email_endpoint" && preferences.isKey("emailEndpoint")) out = preferences.getString("emailEndpoint", "");
-  else if (var == "email_key" && preferences.isKey("emailKey")) out = preferences.getString("emailKey", "");
-  else if (var == "email_host" && preferences.isKey("emailHost")) out = preferences.getString("emailHost", "");
-  else if (var == "twilio_sid" && preferences.isKey("twilioSID")) out = preferences.getString("twilioSID", "");
-  else if (var == "twilio_token" && preferences.isKey("twilioKey")) out = preferences.getString("twilioKey", "");
-  else if (var == "twilio_number" && preferences.isKey("twilioNumber")) out = preferences.getString("twilioNumber", "");
-  else if (var == "twilio_recipient" && preferences.isKey("twilioEndpoint")) out = preferences.getString("twilioEndpoint", "");
   else if (var == "autoconfig" && preferences.isKey("autoconfig")) out = preferences.getString("autoconfig", "");
   preferences.end();
   return out;
   // return var;
 }
 
-//check if meet autoconfig requirment: 
 bool shouldPerformAutoConfig(AsyncWebServerRequest *request) {
     bool autoconfigEnabled = request->hasParam("autoconfig");
     bool ssidFilled = request->hasParam("ssid") && request->getParam("ssid")->value() != "";
@@ -397,11 +385,9 @@ bool shouldPerformAutoConfig(AsyncWebServerRequest *request) {
     return autoconfigEnabled && ssidFilled && passwordFilled && apiKeyFilled;
 }
 
-//perform autoconfig:
 void performAutoConfig(AsyncWebServerRequest *request){
   const char* endpoint = groundlight_endpoint;
   const char* apiToken = groundlight_API_key;
-  // mac address to detectorName 
   String mac = WiFi.macAddress();
   mac.replace(":", "");
   mac = mac.substring(6);
@@ -415,7 +401,6 @@ void performAutoConfig(AsyncWebServerRequest *request){
   }
   preferences.putString("det_id", esp_det.id);
   strcpy(groundlight_det_id, esp_det.id);
-  //deserialize metadata: 
   String metadataStr = esp_det.metadata; 
   DynamicJsonDocument metadataDoc(1024);
   DeserializationError error = deserializeJson(metadataDoc, metadataStr);
@@ -424,21 +409,14 @@ void performAutoConfig(AsyncWebServerRequest *request){
     Serial.println(error.c_str());
     return; 
   }
-  //get parameters from metadata
-  //if you have query delay: save it . else it's ok
   if (metadataDoc.containsKey("Query Delay (seconds)") && !metadataDoc["Query Delay (seconds)"].isNull()) {
     query_delay = metadataDoc["Query Delay (seconds)"];
     preferences.putInt("query_delay", query_delay);
-    // Serial.print(F("Query Delay: "));
-    // Serial.println(query_delay);
   }
   if (metadataDoc.containsKey("Target Confidence") && !metadataDoc["Target Confidence"].isNull()) {
     targetConfidence = metadataDoc["Target Confidence"];
     preferences.putFloat("tConf", targetConfidence);
-    // Serial.print(F("Target Confidence: "));
-    // Serial.println(targetConfidence);
   }
-  //if metadata doesn't have below parameter, we disable default settings: 
   if (metadataDoc.containsKey("Motion Alpha (float between 0 and 1)") && !metadataDoc["Motion Alpha (float between 0 and 1)"].isNull()){
     String mot_a = metadataDoc["Motion Alpha (float between 0 and 1)"];
     preferences.putString("mot_a",mot_a);
@@ -458,7 +436,6 @@ void performAutoConfig(AsyncWebServerRequest *request){
     preferences.remove("sl_uuid");
   }
 } 
-
 #endif
 
 void setup() {
@@ -488,13 +465,13 @@ void setup() {
   
   debug_printf("Firmware : %s built on %s at %s\n", NAME, __DATE__, __TIME__);
 
-  xTaskCreate( 
+  xTaskCreate(
     listener,         // Function that should be called
     "Uart Listener",  // Name of the task (for debugging)
     10000,            // Stack size (bytes)
     NULL,             // Parameter to pass
     1,                // Task priority
-    NULL              // Task handle 
+    NULL              // Task handle
   );
 
   if (RESET_SETTINGS_GPIO != -1) {

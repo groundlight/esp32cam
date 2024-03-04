@@ -445,7 +445,7 @@ detector get_detector_by_name(const char *endpoint, const char *detectorName, co
   }
   // return detector { "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", 0.0, "None" };
   if (0<detectors.size){
-    delete detectors.detectors;
+    delete[] detectors.detectors;
   }
 
   return det;

@@ -412,6 +412,8 @@ void performAutoConfig(AsyncWebServerRequest *request){
     Serial.println("Error: Detector not found. Try connect to the previous configured detector.");
     return; 
   }
+  preferences.putString("det_id", esp_det.id);
+  strcpy(groundlight_det_id, esp_det.id);
   //deserialize metadata: 
   String metadataStr = esp_det.metadata; 
   DynamicJsonDocument metadataDoc(1024);
@@ -421,47 +423,41 @@ void performAutoConfig(AsyncWebServerRequest *request){
     Serial.println(error.c_str());
     return; 
   }
-  // from metadata: get query_delay
-  if (metadataDoc.containsKey("Query Delay (seconds)") && !metadataDoc["Query Delay (seconds)"].isNull() && metadataDoc.containsKey("Target Confidence") && !metadataDoc["Target Confidence"].isNull()) {
-    preferences.putString("det_id", esp_det.id);
-    strcpy(groundlight_det_id, esp_det.id);
-
+  //get parameters from metadata
+  //if you have query delay: save it . else it's ok
+  if (metadataDoc.containsKey("Query Delay (seconds)") && !metadataDoc["Query Delay (seconds)"].isNull()) {
     query_delay = metadataDoc["Query Delay (seconds)"];
     preferences.putInt("query_delay", query_delay);
-    Serial.print(F("Query Delay: "));
-    Serial.println(query_delay);
-
+    // Serial.print(F("Query Delay: "));
+    // Serial.println(query_delay);
+  }
+  if (metadataDoc.containsKey("Target Confidence") && !metadataDoc["Target Confidence"].isNull()) {
     targetConfidence = metadataDoc["Target Confidence"];
     preferences.putFloat("tConf", targetConfidence);
-    Serial.print(F("Target Confidence: "));
-    Serial.println(targetConfidence);
-
-    if (metadataDoc.containsKey("Motion Alpha (float between 0 and 1)") && !metadataDoc["Motion Alpha (float between 0 and 1)"].isNull()){
-      String mot_a = metadataDoc["Motion Alpha (float between 0 and 1)"];
-      preferences.putString("mot_a",mot_a);
-    } else {
-      preferences.remove("mot_a");
-    }
-    if (metadataDoc.containsKey("Motion Beta (float between 0 and 1):") && !metadataDoc["Motion Beta (float between 0 and 1):"].isNull()){
-      String mot_b = metadataDoc["Motion Beta (float between 0 and 1):"];
-      preferences.putString("mot_b",mot_b);
-    } else {
-      preferences.remove("mot_b");
-    }
-    if (metadataDoc.containsKey("Stacklight UUID:") && !metadataDoc["Stacklight UUID:"].isNull()){
-      String sl_uuid = metadataDoc["Stacklight UUID:"];
-      preferences.putString("sl_uuid",sl_uuid);
-      Serial.println("we got stacklight UUID");
-    } else {
-      preferences.putString("sl_uuid", " ");
-      Serial.println("stacklight UUID is empty");
-    }
-
-  } else {
-    Serial.println(F("Query Delay or Target confidence not found in metadata or no value stored in query delay."));
-    return;
+    // Serial.print(F("Target Confidence: "));
+    // Serial.println(targetConfidence);
   }
-} 
+  //if metadata doesn't have below parameter, we disable default settings: 
+  if (metadataDoc.containsKey("Motion Alpha (float between 0 and 1)") && !metadataDoc["Motion Alpha (float between 0 and 1)"].isNull()){
+    String mot_a = metadataDoc["Motion Alpha (float between 0 and 1)"];
+    preferences.putString("mot_a",mot_a);
+  } else if (metadataDoc.containsKey("Motion Alpha (float between 0 and 1)") && metadataDoc["Motion Alpha (float between 0 and 1)"].isNull()){
+    preferences.remove("mot_a");
+  }
+  if (metadataDoc.containsKey("Motion Beta (float between 0 and 1)") && !metadataDoc["Motion Beta (float between 0 and 1)"].isNull()){
+    String mot_b = metadataDoc["Motion Beta (float between 0 and 1)"];
+    preferences.putString("mot_b",mot_b);
+  } else if(metadataDoc.containsKey("Motion Beta (float between 0 and 1)") && metadataDoc["Motion Beta (float between 0 and 1)"].isNull()){
+    preferences.remove("mot_b");
+  }
+  if (metadataDoc.containsKey("Stacklight UUID") && !metadataDoc["Stacklight UUID"].isNull()){
+    String sl_uuid = metadataDoc["Stacklight UUID"];
+    preferences.putString("sl_uuid",sl_uuid);
+  } else if (metadataDoc.containsKey("Stacklight UUID") && metadataDoc["Stacklight UUID"].isNull()){
+    preferences.remove("sl_uuid");
+  }
+
+  } 
 
 #endif
 
@@ -645,7 +641,7 @@ void setup() {
     WiFi.begin(ssid, password);
     wifi_configured = true;
   }
-
+#ifdef ENABLE_STACKLIGHT
   if (preferences.isKey("ssid") && preferences.isKey("sl_uuid") && !preferences.isKey("sl_ip")) {
 
     WiFi.disconnect();
@@ -672,6 +668,7 @@ void setup() {
     }
     WiFi.begin(ssid, password);
   }
+#endif
 
   if (preferences.isKey("endpoint") && preferences.getString("endpoint", "") != "") {
     preferences.getString("endpoint", groundlight_endpoint, 60);
@@ -967,12 +964,14 @@ void loop () {
         notificationState = NOTIFICATION_ATTEMPT_FAILED;
       }
     }
-    preferences.begin("config");
-    if (preferences.isKey("sl_uuid")) {
-      if (!notifyStacklight(last_label)) {
-        debug_println("Failed to notify stacklight");
+    #ifdef ENABLE_STACKLIGHT
+      preferences.begin("config");
+      if (preferences.isKey("sl_uuid")) {
+        if (!notifyStacklight(last_label)) {
+          debug_println("Failed to notify stacklight");
+        }
       }
-    }
+    #endif
     resultDoc.clear();
     preferences.end();
     if (WiFi.SSID() != ssid) {
@@ -1265,7 +1264,7 @@ bool sendNotifications(char *label, camera_fb_t *fb) {
   preferences.end();
   return worked;
 }
-
+#ifdef ENABLE_STACKLIGHT
 bool notifyStacklight(const char * label) {
   preferences.begin("config");
   if (!preferences.isKey("sl_uuid")) {
@@ -1306,6 +1305,7 @@ bool notifyStacklight(const char * label) {
   preferences.end();
   return isKey;
 }
+#endif
 
 bool decodeWorkingHoursString(String working_hours) {
   // 08:17

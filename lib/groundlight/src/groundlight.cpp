@@ -437,11 +437,17 @@ detector get_detector_by_id(const char *endpoint, const char *detector_id, const
 
 detector get_detector_by_name(const char *endpoint, const char *detectorName, const char *apiToken) { //given input: detectorName 
   detector_list detectors = get_detector_list(endpoint, apiToken);
+  detector det = { "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", 0.0, "None" };
   for (int i = 0; i < detectors.size; i++) {
     if (String(detectors.detectors[i].name) == String(detectorName)) {
-      return detectors.detectors[i]; 
+      det = detectors.detectors[i]; 
     }
   }
-  return detector { "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", 0.0, "None" };
+  // return detector { "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", 0.0, "None" };
+  if (0<detectors.size){
+    delete detectors.detectors;
+  }
+
+  return det;
 }
 #endif

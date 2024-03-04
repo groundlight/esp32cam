@@ -275,9 +275,10 @@ const char index_html[] PROGMEM = R"rawliteral(
     form {
       display: flex;
       flex-direction: column;
-      place-items: center normal;
+      /* place-items: center normal; */
+      align-items: center; 
     }
-    input {
+    input, #motionSettings, #stacklightSettings {
       width: 80vw;
       margin: 10px;
     }
@@ -300,25 +301,39 @@ const char index_html[] PROGMEM = R"rawliteral(
     WiFi SSID: <input type="text" name="ssid" value="%ssid%">
     WiFi Password: <input type="password" name="pw" value="%password%"> 
     API Key: <input type="password" name="api_key" value="%api_key%">
-    Autoconfig: <input type="checkbox" name="autoconfig" value="true">
+    Autoconfig: <input type="checkbox" id="autoconfig" name="autoconfig" value="true" onchange="toggleAutoConfig()">
+    <div id="autoConfigMessage" style="display:none;" >
+      <p>If autoconfig is checked, all of the settings below will be ignored and get updated automatically.</p>
+    </div>
     Detector Id: <input type="text" name="det_id" value="%det_id%">
     Query Delay (seconds): <input type="text" name="query_delay" value="%query_delay%">
     Endpoint: <input type="text" name="endpoint" value="%endpoint%">
     Target Confidence: <input type="text" name="tConf" value="%tConf%">
-    Motion Alpha (float between 0 and 1): <input type="text" name="mot_a" value="%mot_a%">
-    Motion Beta (float between 0 and 1): <input type="text" name="mot_b" value="%mot_b%">
-    Stacklight UUID: <input type="text" name="sl_uuid" value="%sl_uuid%">
-    Slack URL: <input type="text" name="slack_url" value="%slack_url%">
-    Email: <input type="text" name="email" value="%email%">
-    Email Endpoint: <input type="text" name="email_endpoint" value="%email_endpoint%">
-    Email Key: <input type="text" name="email_key" value="%email_key%">
-    Email Host: <input type="text" name="email_host" value="%email_host%">
-    Twilio SID: <input type="text" name="twilio_sid" value="%twilio_sid%">
-    Twilio Token: <input type="text" name="twilio_token" value="%twilio_token%">
-    Twilio Number: <input type="text" name="twilio_number" value="%twilio_number%">
-    Twilio Recipient: <input type="text" name="twilio_recipient" value="%twilio_recipient%">
+    Enable Motion Detector: <input type="checkbox" id="motionDetectorCheckbox" name="motionDetector" value="true" onchange="toggleMotionSettings()">
+    <div id="motionSettings" style="display:none;">
+      Motion Alpha (float between 0 and 1): <input type="text" name="mot_a" value="%mot_a%">
+      Motion Beta (float between 0 and 1): <input type="text" name="mot_b" value="%mot_b%">
+    </div>
+    Enable Stacklight: <input type="checkbox" id="stacklightCheckbox" name="stacklightbox" value="true" onchange="toggleStacklightSettings()">
+    <div id="stacklightSettings" style="display:none;">
+      Stacklight UUID: <input type="text" name="sl_uuid" value="%sl_uuid%">
+    </div>
     <input type="submit" value="Submit">
   </form>
+  <script>
+  function toggleAutoConfig() {
+    var isChecked = document.getElementById('autoconfig').checked;
+    document.getElementById('autoConfigMessage').style.display = isChecked ? 'block' : 'none';
+  }
+  function toggleMotionSettings() {
+    var isChecked = document.getElementById('motionDetectorCheckbox').checked;
+    document.getElementById('motionSettings').style.display = isChecked ? 'block' : 'none';
+  }
+  function toggleStacklightSettings() {
+    var isChecked = document.getElementById('stacklightCheckbox').checked;
+    document.getElementById('stacklightSettings').style.display = isChecked ? 'block' : 'none';
+  }
+  </script>
 </body></html>
 )rawliteral";
 
@@ -397,20 +412,15 @@ void performAutoConfig(AsyncWebServerRequest *request){
     Serial.println("Error: Detector not found. Try connect to the previous configured detector.");
     return; 
   }
-
   //deserialize metadata: 
   String metadataStr = esp_det.metadata; 
-
   DynamicJsonDocument metadataDoc(1024);
-
   DeserializationError error = deserializeJson(metadataDoc, metadataStr);
-
   if (error) {
     Serial.print(F("deserializeJson() failed: "));
     Serial.println(error.c_str());
     return; 
   }
-
   // from metadata: get query_delay
   if (metadataDoc.containsKey("Query Delay (seconds)") && !metadataDoc["Query Delay (seconds)"].isNull() && metadataDoc.containsKey("Target Confidence") && !metadataDoc["Target Confidence"].isNull()) {
     preferences.putString("det_id", esp_det.id);
@@ -426,15 +436,31 @@ void performAutoConfig(AsyncWebServerRequest *request){
     Serial.print(F("Target Confidence: "));
     Serial.println(targetConfidence);
 
+    if (metadataDoc.containsKey("Motion Alpha (float between 0 and 1)") && !metadataDoc["Motion Alpha (float between 0 and 1)"].isNull()){
+      String mot_a = metadataDoc["Motion Alpha (float between 0 and 1)"];
+      preferences.putString("mot_a",mot_a);
+    } else {
+      preferences.remove("mot_a");
+    }
+    if (metadataDoc.containsKey("Motion Beta (float between 0 and 1):") && !metadataDoc["Motion Beta (float between 0 and 1):"].isNull()){
+      String mot_b = metadataDoc["Motion Beta (float between 0 and 1):"];
+      preferences.putString("mot_b",mot_b);
+    } else {
+      preferences.remove("mot_b");
+    }
+    if (metadataDoc.containsKey("Stacklight UUID:") && !metadataDoc["Stacklight UUID:"].isNull()){
+      String sl_uuid = metadataDoc["Stacklight UUID:"];
+      preferences.putString("sl_uuid",sl_uuid);
+      Serial.println("we got stacklight UUID");
+    } else {
+      preferences.putString("sl_uuid", " ");
+      Serial.println("stacklight UUID is empty");
+    }
 
   } else {
     Serial.println(F("Query Delay or Target confidence not found in metadata or no value stored in query delay."));
     return;
   }
-    //optional: 
-    //motion alpha
-    //motion beta
-    //SL UUID
 } 
 
 #endif

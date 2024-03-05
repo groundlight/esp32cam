@@ -367,12 +367,7 @@ StaticJsonDocument<DET_DOC_SIZE> groundlight_json_doc;
 
 detector_list get_detector_list(const char *endpoint, const char *apiToken) {
   String jsonResponse = get_detectors(endpoint, apiToken);
-  auto error = deserializeJson(groundlight_json_doc, jsonResponse);
-    if (error) {
-        Serial.print("deserializeJson() failed: ");
-        Serial.println(error.c_str());
-        return {};
-    }
+  deserializeJson(groundlight_json_doc, jsonResponse);
   JsonArray detectors = groundlight_json_doc["results"];
   detector *_detector_list = new detector[detectors.size()];
   for (int i = 0; i < detectors.size(); i++)

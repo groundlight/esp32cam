@@ -522,15 +522,15 @@ void setup() {
   // Send web page with input fields to client
   // at http://192.168.4.1/
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html, processor); 
+    request->send_P(200, "text/html", index_html, processor);
   }); 
 
   server.on("/config", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    preferences.begin("config", false); 
+    preferences.begin("config", false);
     if (request->hasParam("ssid") && request->getParam("ssid")->value() != "") {
       preferences.putString("ssid", request->getParam("ssid")->value());
       strcpy(ssid, request->getParam("ssid")->value().c_str());
-    } 
+    }
     if (request->hasParam("pw") && request->getParam("pw")->value() != "") {
       preferences.putString("password", request->getParam("pw")->value());
       strcpy(password, request->getParam("pw")->value().c_str());
@@ -567,33 +567,6 @@ void setup() {
       }
       if (request->hasParam("sl_uuid") && request->getParam("sl_uuid")->value() != "") {
         preferences.putString("sl_uuid", request->getParam("sl_uuid")->value());
-      }
-      if (request->hasParam("slack_url") && request->getParam("slack_url")->value() != "") {
-        preferences.putString("slack_url", request->getParam("slack_url")->value());
-      }
-      if (request->hasParam("email") && request->getParam("email")->value() != "") {
-        preferences.putString("email", request->getParam("email")->value());
-      }
-      if (request->hasParam("email_endpoint") && request->getParam("email_endpoint")->value() != "") {
-        preferences.putString("emailEndpoint", request->getParam("email_endpoint")->value());
-      }
-      if (request->hasParam("email_key") && request->getParam("email_key")->value() != "") {
-        preferences.putString("emailKey", request->getParam("email_key")->value());
-      }
-      if (request->hasParam("email_host") && request->getParam("email_host")->value() != "") {
-        preferences.putString("emailHost", request->getParam("email_host")->value());
-      }
-      if (request->hasParam("twilio_sid") && request->getParam("twilio_sid")->value() != "") {
-        preferences.putString("twilioSID", request->getParam("twilio_sid")->value());
-      }
-      if (request->hasParam("twilio_token") && request->getParam("twilio_token")->value() != "") {
-        preferences.putString("twilioKey", request->getParam("twilio_token")->value());
-      }
-      if (request->hasParam("twilio_number") && request->getParam("twilio_number")->value() != "") {
-        preferences.putString("twilioNumber", request->getParam("twilio_number")->value());
-      }
-      if (request->hasParam("twilio_recipient") && request->getParam("twilio_recipient")->value() != "") {
-        preferences.putString("twilioEndpoint", request->getParam("twilio_recipient")->value());
       }
       if (request->hasParam("autoconfig") && request->getParam("autoconfig")->value() != "") {
         preferences.putString("autoconfig", request->getParam("autoconfig")->value());

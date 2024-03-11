@@ -523,7 +523,7 @@ void setup() {
   // at http://192.168.4.1/
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html, processor);
-  }); 
+  });
 
   server.on("/config", HTTP_GET, [] (AsyncWebServerRequest *request) {
     preferences.begin("config", false);

@@ -378,7 +378,7 @@ detector_list get_detector_list(const char *endpoint, const char *apiToken) {
     strcpy(_detector_list[i].type, detectors[i]["type"]);
     strcpy(_detector_list[i].created_at, detectors[i]["created_at"]);
     strcpy(_detector_list[i].name, detectors[i]["name"]);
-    strcpy(_detector_list[i].query, detectors[i]["query"]);
+    strlcpy(_detector_list[i].query, detectors[i]["query"],sizeof(_detector_list[i].query));
     strcpy(_detector_list[i].group_name, detectors[i]["group_name"]);
     if (!detectors[i]["metadata"].isNull()) {
           String metadataStr;

@@ -1231,10 +1231,8 @@ bool notifyStacklight(const char * label) {
     stacklightState = STACKLIGHT_ONLINE;
     String SSID = ((const StringSumHelper)"GL_STACKLIGHT_" + preferences.getString("sl_uuid", ""));
     WiFi.begin(SSID, (const StringSumHelper)"gl_stacklight_password_" + preferences.getString("sl_uuid", ""));
-    Serial.println("wifi begins");
     for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
       vTaskDelay(500 / portTICK_PERIOD_MS);
-      Serial.println("debug");
     }
     if(WiFi.isConnected()) {
       String res = Stacklight::tryConnectToStacklight(ssid, password);

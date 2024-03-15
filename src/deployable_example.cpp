@@ -1011,36 +1011,6 @@ bool try_save_config(char * input) {
     } else {
       preferences.remove("endpoint");
     }
-    if (doc["additional_config"].containsKey("notificationOptions") && doc["additional_config"]["notificationOptions"] != "None") {
-      debug_println("Found notification options!");
-      preferences.putString("notiOptns", (const char *)doc["additional_config"]["notificationOptions"]);
-      if (doc["additional_config"].containsKey("slack") && doc["additional_config"]["slack"].containsKey("slackKey")) {
-        debug_println("Found slack!");
-        preferences.putString("slackKey", (const char *)doc["additional_config"]["slack"]["slackKey"]);
-        preferences.putString("slackEndpoint", (const char *)doc["additional_config"]["slack"]["slackEndpoint"]);
-      } else {
-        preferences.remove("slackKey");
-        preferences.remove("slackEndpoint");
-      }
-      if (doc["additional_config"].containsKey("twilio") && doc["additional_config"]["twilio"].containsKey("twilioKey")) {
-        debug_println("Found twilio!");
-        preferences.putString("twilioSID", (const char *)doc["additional_config"]["twilio"]["twilioSID"]);
-        preferences.putString("twilioKey", (const char *)doc["additional_config"]["twilio"]["twilioKey"]);
-        preferences.putString("twilioNumber", (const char *)doc["additional_config"]["twilio"]["twilioNumber"]);
-        preferences.putString("twilioEndpoint", (const char *)doc["additional_config"]["twilio"]["twilioEndpoint"]);
-      } else {
-        preferences.remove("twilioKey");
-      }
-      if (doc["additional_config"].containsKey("email") && doc["additional_config"]["email"].containsKey("emailKey")) {
-        debug_println("Found email!");
-        preferences.putString("emailKey", (const char *)doc["additional_config"]["email"]["emailKey"]);
-        preferences.putString("emailEndpoint", (const char *)doc["additional_config"]["email"]["emailEndpoint"]);
-        preferences.putString("email", (const char *)doc["additional_config"]["email"]["email"]);
-        preferences.putString("emailHost", (const char *)doc["additional_config"]["email"]["emailHost"]);
-      } else {
-        preferences.remove("emailKey");
-      }
-    }
     if (doc["additional_config"].containsKey("stacklight") && doc["additional_config"]["stacklight"].containsKey("uuid")) {
       debug_println("Found stacklight!");
       preferences.putString("sl_uuid", (const char *)doc["additional_config"]["stacklight"]["uuid"]);
@@ -1300,22 +1270,6 @@ void try_answer_query(String input) {
     }
     if (preferences.isKey("notiOptns")) {
       synthesisDoc["additional_config"]["notificationOptions"] = preferences.getString("notiOptns", "None");
-    }
-    if (preferences.isKey("slackKey") && preferences.isKey("slackEndpoint")) {
-      synthesisDoc["additional_config"]["slack"]["slackKey"] = preferences.getString("slackKey", "None");
-      synthesisDoc["additional_config"]["slack"]["slackEndpoint"] = preferences.getString("slackEndpoint", "None");
-    }
-    if (preferences.isKey("twilioSID") && preferences.isKey("twilioKey") && preferences.isKey("twilioNumber") && preferences.isKey("twilioEndpoint")) {
-      synthesisDoc["additional_config"]["twilio"]["twilioSID"] = preferences.getString("twilioSID", "None");
-      synthesisDoc["additional_config"]["twilio"]["twilioKey"] = preferences.getString("twilioKey", "None");
-      synthesisDoc["additional_config"]["twilio"]["twilioNumber"] = preferences.getString("twilioNumber", "None");
-      synthesisDoc["additional_config"]["twilio"]["twilioEndpoint"] = preferences.getString("twilioEndpoint", "None");
-    }
-    if (preferences.isKey("emailKey") && preferences.isKey("email") && preferences.isKey("emailEndpoint")) {
-      synthesisDoc["additional_config"]["email"]["emailKey"] = preferences.getString("emailKey", "None");
-      synthesisDoc["additional_config"]["email"]["emailEndpoint"] = preferences.getString("emailEndpoint", "None");
-      synthesisDoc["additional_config"]["email"]["email"] = preferences.getString("email", "None");
-      synthesisDoc["additional_config"]["email"]["emailHost"] = preferences.getString("emailHost", "None");
     }
     if (preferences.isKey("sl_uuid")) {
       synthesisDoc["additional_config"]["stacklight"]["uuid"] = preferences.getString("sl_uuid", "None");

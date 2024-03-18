@@ -295,28 +295,48 @@ const char index_html[] PROGMEM = R"rawliteral(
       background-color: #45a049;
     }
   </style>
+  <script>
+  function toggleAutoConfig() {
+    var isChecked = document.getElementById('autoconfig').checked;
+    document.getElementById('autoConfigMessage').style.display = isChecked ? 'block' : 'none';
+  }
+  function toggleMotionSettings() {
+    var isChecked = document.getElementById('motionDetectorCheckbox').checked;
+    document.getElementById('motionSettings').style.display = isChecked ? 'block' : 'none';
+  }
+  function toggleStacklightSettings() {
+    var isChecked = document.getElementById('stacklightCheckbox').checked;
+    document.getElementById('stacklightSettings').style.display = isChecked ? 'block' : 'none';
+  }
+  </script>
   </head><body>
   <form action="/config">
     WiFi SSID: <input type="text" name="ssid" value="%ssid%">
-    WiFi Password: <input type="text" name="pw" value="%password%">
+    WiFi Password: <input type="password" name="pw" value="%password%"> 
+    API Key: <input type="password" name="api_key" value="%api_key%">
+    Autoconfig: <input type="checkbox" id="autoconfig" name="autoconfig" value="true" onchange="toggleAutoConfig()">
+    <div id="autoConfigMessage" style="display:none;" >
+      <p>If autoconfig is checked, all of the settings below will be ignored and get updated automatically.</p>
+    </div>
     Detector Id: <input type="text" name="det_id" value="%det_id%">
-    API Key: <input type="text" name="api_key" value="%api_key%">
     Query Delay (seconds): <input type="text" name="query_delay" value="%query_delay%">
     Endpoint: <input type="text" name="endpoint" value="%endpoint%">
-    Target Confidence: <input type="text" name="tConf" value="%tConf%">
-    Motion Alpha (float between 0 and 1): <input type="text" name="mot_a" value="%mot_a%">
-    Motion Beta (float between 0 and 1): <input type="text" name="mot_b" value="%mot_b%">
-    Stacklight UUID: <input type="text" name="sl_uuid" value="%sl_uuid%">
-    Slack URL: <input type="text" name="slack_url" value="%slack_url%">
-    Email: <input type="text" name="email" value="%email%">
-    Email Endpoint: <input type="text" name="email_endpoint" value="%email_endpoint%">
-    Email Key: <input type="text" name="email_key" value="%email_key%">
-    Email Host: <input type="text" name="email_host" value="%email_host%">
-    Twilio SID: <input type="text" name="twilio_sid" value="%twilio_sid%">
-    Twilio Token: <input type="text" name="twilio_token" value="%twilio_token%">
-    Twilio Number: <input type="text" name="twilio_number" value="%twilio_number%">
-    Twilio Recipient: <input type="text" name="twilio_recipient" value="%twilio_recipient%">
-    <input type="submit" value="Submit">
+    Target Confidence: <input type="text" name="tConf" value="%tConf%">)rawliteral"
+    #ifdef ENABLE_STACKLIGHT
+    R"rawliteral(
+      Enable Motion Detector: <input type="checkbox" id="motionDetectorCheckbox" name="motionDetector" value="true" onchange="toggleMotionSettings()">
+      <div id="motionSettings" style="display:none;">
+        Motion Alpha (float between 0 and 1): <input type="text" name="mot_a" value="%mot_a%"><br>
+        Motion Beta (float between 0 and 1): <input type="text" name="mot_b" value="%mot_b%">
+      </div>
+      Enable Stacklight: <input type="checkbox" id="stacklightCheckbox" name="stacklightbox" value="true" onchange="toggleStacklightSettings()">
+      <div id="stacklightSettings" style="display:none;">
+        Stacklight UUID: <input type="text" name="sl_uuid" value="%sl_uuid%">
+      </div>
+    )rawliteral"
+    #else
+    #endif
+   R"rawliteral( <input type="submit" value="Submit">
   </form>
 </body></html>
 )rawliteral";
@@ -355,19 +375,72 @@ String processor(const String& var) {
   else if (var == "mot_a" && preferences.isKey("mot_a")) out = String(preferences.getString("mot_a", "0.0"));
   else if (var == "mot_b" && preferences.isKey("mot_b")) out = String(preferences.getString("mot_b", "0.0"));
   else if (var == "sl_uuid" && preferences.isKey("sl_uuid")) out = preferences.getString("sl_uuid", "");
-  else if (var == "slack_url" && preferences.isKey("slack_url")) out = preferences.getString("slack_url", "");
-  else if (var == "email" && preferences.isKey("email")) out = preferences.getString("email", "");
-  else if (var == "email_endpoint" && preferences.isKey("emailEndpoint")) out = preferences.getString("emailEndpoint", "");
-  else if (var == "email_key" && preferences.isKey("emailKey")) out = preferences.getString("emailKey", "");
-  else if (var == "email_host" && preferences.isKey("emailHost")) out = preferences.getString("emailHost", "");
-  else if (var == "twilio_sid" && preferences.isKey("twilioSID")) out = preferences.getString("twilioSID", "");
-  else if (var == "twilio_token" && preferences.isKey("twilioKey")) out = preferences.getString("twilioKey", "");
-  else if (var == "twilio_number" && preferences.isKey("twilioNumber")) out = preferences.getString("twilioNumber", "");
-  else if (var == "twilio_recipient" && preferences.isKey("twilioEndpoint")) out = preferences.getString("twilioEndpoint", "");
+  else if (var == "autoconfig" && preferences.isKey("autoconfig")) out = preferences.getString("autoconfig", "");
   preferences.end();
   return out;
   // return var;
 }
+
+bool shouldPerformAutoConfig(AsyncWebServerRequest *request) {
+    bool autoconfigEnabled = request->hasParam("autoconfig");
+    bool ssidFilled = request->hasParam("ssid") && request->getParam("ssid")->value() != "";
+    bool passwordFilled = request->hasParam("pw") && request->getParam("pw")->value() != "";
+    bool apiKeyFilled = request->hasParam("api_key") && request->getParam("api_key")->value() != "";
+
+    return autoconfigEnabled && ssidFilled && passwordFilled && apiKeyFilled;
+}
+
+void performAutoConfig(AsyncWebServerRequest *request){
+  const char* endpoint = groundlight_endpoint;
+  const char* apiToken = groundlight_API_key;
+  String mac = WiFi.macAddress();
+  mac.replace(":", "");
+  mac = mac.substring(6);
+  String esp_detector_name = (StringSumHelper) "ESP32-CAM-" + mac;
+  debug_printf("esp cam detector name:  %s\n",esp_detector_name.c_str());
+  detector esp_det = get_detector_by_name(endpoint, esp_detector_name.c_str(), apiToken); 
+  if (strcmp(esp_det.id, "NONE") == 0) {
+    preferences.putString("det_id", "DETECTOR NOT FOUND");
+    debug_printf("Error: Detector not found.");
+    return; 
+  }
+  preferences.putString("det_id", esp_det.id);
+  strcpy(groundlight_det_id, esp_det.id);
+  String metadataStr = esp_det.metadata; 
+  DynamicJsonDocument metadataDoc(1024);
+  DeserializationError error = deserializeJson(metadataDoc, metadataStr);
+  if (error) {
+    debug_printf(("deserializeJson() failed: "));
+    debug_printf(error.c_str());
+    return; 
+  }
+  if (metadataDoc.containsKey("Query Delay (seconds)") && !metadataDoc["Query Delay (seconds)"].isNull()) {
+    query_delay = metadataDoc["Query Delay (seconds)"];
+    preferences.putInt("query_delay", query_delay);
+  }
+  if (metadataDoc.containsKey("Target Confidence") && !metadataDoc["Target Confidence"].isNull()) {
+    targetConfidence = metadataDoc["Target Confidence"];
+    preferences.putFloat("tConf", targetConfidence);
+  }
+  if (metadataDoc.containsKey("Motion Alpha (float between 0 and 1)") && !metadataDoc["Motion Alpha (float between 0 and 1)"].isNull()){
+    String mot_a = metadataDoc["Motion Alpha (float between 0 and 1)"];
+    preferences.putString("mot_a",mot_a);
+  } else if (metadataDoc.containsKey("Motion Alpha (float between 0 and 1)") && metadataDoc["Motion Alpha (float between 0 and 1)"].isNull()){
+    preferences.remove("mot_a");
+  }
+  if (metadataDoc.containsKey("Motion Beta (float between 0 and 1)") && !metadataDoc["Motion Beta (float between 0 and 1)"].isNull()){
+    String mot_b = metadataDoc["Motion Beta (float between 0 and 1)"];
+    preferences.putString("mot_b",mot_b);
+  } else if(metadataDoc.containsKey("Motion Beta (float between 0 and 1)") && metadataDoc["Motion Beta (float between 0 and 1)"].isNull()){
+    preferences.remove("mot_b");
+  }
+  if (metadataDoc.containsKey("Stacklight UUID") && !metadataDoc["Stacklight UUID"].isNull()){
+    String sl_uuid = metadataDoc["Stacklight UUID"];
+    preferences.putString("sl_uuid",sl_uuid);
+  } else if (metadataDoc.containsKey("Stacklight UUID") && metadataDoc["Stacklight UUID"].isNull()){
+    preferences.remove("sl_uuid");
+  }
+} 
 #endif
 
 void setup() {
@@ -467,61 +540,43 @@ void setup() {
       preferences.putString("password", request->getParam("pw")->value());
       strcpy(password, request->getParam("pw")->value().c_str());
     }
-    if (request->hasParam("det_id") && request->getParam("det_id")->value() != "") {
-      preferences.putString("det_id", request->getParam("det_id")->value());
-      strcpy(groundlight_det_id, request->getParam("det_id")->value().c_str());
-    }
     if (request->hasParam("api_key") && request->getParam("api_key")->value() != "") {
       preferences.putString("api_key", request->getParam("api_key")->value());
       strcpy(groundlight_API_key, request->getParam("api_key")->value().c_str());
     }
-    if (request->hasParam("query_delay") && request->getParam("query_delay")->value() != "") {
-      query_delay = request->getParam("query_delay")->value().toInt();
-      preferences.putInt("query_delay", query_delay);
-    }
-    if (request->hasParam("endpoint") && request->getParam("endpoint")->value() != "") {
-      preferences.putString("endpoint", request->getParam("endpoint")->value());
-      strcpy(groundlight_endpoint, request->getParam("endpoint")->value().c_str());
-    }
-    if (request->hasParam("tConf") && request->getParam("tConf")->value() != "") {
-      targetConfidence = request->getParam("tConf")->value().toFloat();
-      preferences.putFloat("tConf", targetConfidence);
-    }
-    if (request->hasParam("mot_a") && request->getParam("mot_a")->value() != "") {
-      preferences.putString("mot_a", request->getParam("mot_a")->value());
-    }
-    if (request->hasParam("mot_b") && request->getParam("mot_b")->value() != "") {
-      preferences.putString("mot_b", request->getParam("mot_b")->value());
-    }
-    if (request->hasParam("sl_uuid") && request->getParam("sl_uuid")->value() != "") {
-      preferences.putString("sl_uuid", request->getParam("sl_uuid")->value());
-    }
-    if (request->hasParam("slack_url") && request->getParam("slack_url")->value() != "") {
-      preferences.putString("slack_url", request->getParam("slack_url")->value());
-    }
-    if (request->hasParam("email") && request->getParam("email")->value() != "") {
-      preferences.putString("email", request->getParam("email")->value());
-    }
-    if (request->hasParam("email_endpoint") && request->getParam("email_endpoint")->value() != "") {
-      preferences.putString("emailEndpoint", request->getParam("email_endpoint")->value());
-    }
-    if (request->hasParam("email_key") && request->getParam("email_key")->value() != "") {
-      preferences.putString("emailKey", request->getParam("email_key")->value());
-    }
-    if (request->hasParam("email_host") && request->getParam("email_host")->value() != "") {
-      preferences.putString("emailHost", request->getParam("email_host")->value());
-    }
-    if (request->hasParam("twilio_sid") && request->getParam("twilio_sid")->value() != "") {
-      preferences.putString("twilioSID", request->getParam("twilio_sid")->value());
-    }
-    if (request->hasParam("twilio_token") && request->getParam("twilio_token")->value() != "") {
-      preferences.putString("twilioKey", request->getParam("twilio_token")->value());
-    }
-    if (request->hasParam("twilio_number") && request->getParam("twilio_number")->value() != "") {
-      preferences.putString("twilioNumber", request->getParam("twilio_number")->value());
-    }
-    if (request->hasParam("twilio_recipient") && request->getParam("twilio_recipient")->value() != "") {
-      preferences.putString("twilioEndpoint", request->getParam("twilio_recipient")->value());
+    
+    if (shouldPerformAutoConfig(request)){
+      performAutoConfig(request);
+    } else {
+      if (request->hasParam("det_id") && request->getParam("det_id")->value() != "") {
+        preferences.putString("det_id", request->getParam("det_id")->value());
+        strcpy(groundlight_det_id, request->getParam("det_id")->value().c_str());
+      }
+      if (request->hasParam("query_delay") && request->getParam("query_delay")->value() != "") {
+        query_delay = request->getParam("query_delay")->value().toInt();
+        preferences.putInt("query_delay", query_delay);
+      }
+      if (request->hasParam("endpoint") && request->getParam("endpoint")->value() != "") {
+        preferences.putString("endpoint", request->getParam("endpoint")->value());
+        strcpy(groundlight_endpoint, request->getParam("endpoint")->value().c_str());
+      }
+      if (request->hasParam("tConf") && request->getParam("tConf")->value() != "") {
+        targetConfidence = request->getParam("tConf")->value().toFloat();
+        preferences.putFloat("tConf", targetConfidence);
+      }
+      if (request->hasParam("mot_a") && request->getParam("mot_a")->value() != "") {
+        preferences.putString("mot_a", request->getParam("mot_a")->value());
+      }
+      if (request->hasParam("mot_b") && request->getParam("mot_b")->value() != "") {
+        preferences.putString("mot_b", request->getParam("mot_b")->value());
+      }
+      if (request->hasParam("sl_uuid") && request->getParam("sl_uuid")->value() != "") {
+        preferences.putString("sl_uuid", request->getParam("sl_uuid")->value());
+      }
+      if (request->hasParam("autoconfig") && request->getParam("autoconfig")->value() != "") {
+        preferences.putString("autoconfig", request->getParam("autoconfig")->value());
+      }
+
     }
     // request->send(200, "text/html", "Configuration sent to your ESP Camera<br><a href=\"/\">Return to Home Page</a>");
     request->send_P(200, "text/html", sent_html);
@@ -541,7 +596,7 @@ void setup() {
     WiFi.begin(ssid, password);
     wifi_configured = true;
   }
-
+#ifdef ENABLE_STACKLIGHT
   if (preferences.isKey("ssid") && preferences.isKey("sl_uuid") && !preferences.isKey("sl_ip")) {
 
     WiFi.disconnect();
@@ -568,6 +623,7 @@ void setup() {
     }
     WiFi.begin(ssid, password);
   }
+#endif
 
   if (preferences.isKey("endpoint") && preferences.getString("endpoint", "") != "") {
     preferences.getString("endpoint", groundlight_endpoint, 60);
@@ -634,12 +690,12 @@ void setup() {
   // alloc memory for 565 frames
   frame_565 = (uint8_t *) ps_malloc(FRAME_ARR_LEN);
   frame_565_old = (uint8_t *) ps_malloc(FRAME_ARR_LEN);
-
-  debug_printf("detector_id  : %s\n",groundlight_det_id);
+  
 #ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, LOW);
 #endif
 }
+
 
 void listener(void * parameter) {
   char input3[1000];
@@ -787,6 +843,7 @@ void loop () {
   }
     if (WiFi.isConnected()) {
       debug_printf("WIFI connected to SSID %s\n", ssid);
+
   } else {
       debug_printf("unable to connect to wifi status code %d! (skipping image query and looping again)\n", WiFi.status());
       return;
@@ -861,12 +918,14 @@ void loop () {
         notificationState = NOTIFICATION_ATTEMPT_FAILED;
       }
     }
-    preferences.begin("config");
-    if (preferences.isKey("sl_uuid")) {
-      if (!notifyStacklight(last_label)) {
-        debug_println("Failed to notify stacklight");
+    #ifdef ENABLE_STACKLIGHT
+      preferences.begin("config");
+      if (preferences.isKey("sl_uuid")) {
+        if (!notifyStacklight(last_label)) {
+          debug_println("Failed to notify stacklight");
+        }
       }
-    }
+    #endif
     resultDoc.clear();
     preferences.end();
     if (WiFi.SSID() != ssid) {
@@ -956,36 +1015,6 @@ bool try_save_config(char * input) {
       strcpy(groundlight_endpoint, (const char *)doc["additional_config"]["endpoint"]);
     } else {
       preferences.remove("endpoint");
-    }
-    if (doc["additional_config"].containsKey("notificationOptions") && doc["additional_config"]["notificationOptions"] != "None") {
-      debug_println("Found notification options!");
-      preferences.putString("notiOptns", (const char *)doc["additional_config"]["notificationOptions"]);
-      if (doc["additional_config"].containsKey("slack") && doc["additional_config"]["slack"].containsKey("slackKey")) {
-        debug_println("Found slack!");
-        preferences.putString("slackKey", (const char *)doc["additional_config"]["slack"]["slackKey"]);
-        preferences.putString("slackEndpoint", (const char *)doc["additional_config"]["slack"]["slackEndpoint"]);
-      } else {
-        preferences.remove("slackKey");
-        preferences.remove("slackEndpoint");
-      }
-      if (doc["additional_config"].containsKey("twilio") && doc["additional_config"]["twilio"].containsKey("twilioKey")) {
-        debug_println("Found twilio!");
-        preferences.putString("twilioSID", (const char *)doc["additional_config"]["twilio"]["twilioSID"]);
-        preferences.putString("twilioKey", (const char *)doc["additional_config"]["twilio"]["twilioKey"]);
-        preferences.putString("twilioNumber", (const char *)doc["additional_config"]["twilio"]["twilioNumber"]);
-        preferences.putString("twilioEndpoint", (const char *)doc["additional_config"]["twilio"]["twilioEndpoint"]);
-      } else {
-        preferences.remove("twilioKey");
-      }
-      if (doc["additional_config"].containsKey("email") && doc["additional_config"]["email"].containsKey("emailKey")) {
-        debug_println("Found email!");
-        preferences.putString("emailKey", (const char *)doc["additional_config"]["email"]["emailKey"]);
-        preferences.putString("emailEndpoint", (const char *)doc["additional_config"]["email"]["emailEndpoint"]);
-        preferences.putString("email", (const char *)doc["additional_config"]["email"]["email"]);
-        preferences.putString("emailHost", (const char *)doc["additional_config"]["email"]["emailHost"]);
-      } else {
-        preferences.remove("emailKey");
-      }
     }
     if (doc["additional_config"].containsKey("stacklight") && doc["additional_config"]["stacklight"].containsKey("uuid")) {
       debug_println("Found stacklight!");
@@ -1159,7 +1188,7 @@ bool sendNotifications(char *label, camera_fb_t *fb) {
   preferences.end();
   return worked;
 }
-
+#ifdef ENABLE_STACKLIGHT
 bool notifyStacklight(const char * label) {
   preferences.begin("config");
   if (!preferences.isKey("sl_uuid")) {
@@ -1200,6 +1229,7 @@ bool notifyStacklight(const char * label) {
   preferences.end();
   return isKey;
 }
+#endif
 
 bool decodeWorkingHoursString(String working_hours) {
   // 08:17
@@ -1245,22 +1275,6 @@ void try_answer_query(String input) {
     }
     if (preferences.isKey("notiOptns")) {
       synthesisDoc["additional_config"]["notificationOptions"] = preferences.getString("notiOptns", "None");
-    }
-    if (preferences.isKey("slackKey") && preferences.isKey("slackEndpoint")) {
-      synthesisDoc["additional_config"]["slack"]["slackKey"] = preferences.getString("slackKey", "None");
-      synthesisDoc["additional_config"]["slack"]["slackEndpoint"] = preferences.getString("slackEndpoint", "None");
-    }
-    if (preferences.isKey("twilioSID") && preferences.isKey("twilioKey") && preferences.isKey("twilioNumber") && preferences.isKey("twilioEndpoint")) {
-      synthesisDoc["additional_config"]["twilio"]["twilioSID"] = preferences.getString("twilioSID", "None");
-      synthesisDoc["additional_config"]["twilio"]["twilioKey"] = preferences.getString("twilioKey", "None");
-      synthesisDoc["additional_config"]["twilio"]["twilioNumber"] = preferences.getString("twilioNumber", "None");
-      synthesisDoc["additional_config"]["twilio"]["twilioEndpoint"] = preferences.getString("twilioEndpoint", "None");
-    }
-    if (preferences.isKey("emailKey") && preferences.isKey("email") && preferences.isKey("emailEndpoint")) {
-      synthesisDoc["additional_config"]["email"]["emailKey"] = preferences.getString("emailKey", "None");
-      synthesisDoc["additional_config"]["email"]["emailEndpoint"] = preferences.getString("emailEndpoint", "None");
-      synthesisDoc["additional_config"]["email"]["email"] = preferences.getString("email", "None");
-      synthesisDoc["additional_config"]["email"]["emailHost"] = preferences.getString("emailHost", "None");
     }
     if (preferences.isKey("sl_uuid")) {
       synthesisDoc["additional_config"]["stacklight"]["uuid"] = preferences.getString("sl_uuid", "None");

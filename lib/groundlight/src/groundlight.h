@@ -35,7 +35,8 @@ struct detector
   char query[200];
   char group_name[40];
   float confidence_threshold;
-};
+  char metadata[1024];
+}; 
 
 struct detector_list
 {
@@ -46,6 +47,7 @@ struct detector_list
 detector_list get_detector_list(const char *endpoint, const char *apiToken);
 String detector_to_string(detector d);
 detector get_detector_by_id(const char *endpoint, const char *detectorId, const char *apiToken);
+detector get_detector_by_name(const char *endpoint, const char *detectorName, const char *apiToken);
 float get_query_confidence(const String &jsonResults);
 String get_query_id(const String &jsonResults);
 #endif

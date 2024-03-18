@@ -367,7 +367,6 @@ String get_query_id(const String &jsonResults) {
 
 StaticJsonDocument<DET_DOC_SIZE> groundlight_json_doc;
 
-// Parses the detectors from the Groundlight API.
 detector_list get_detector_list(const char *endpoint, const char *apiToken) {
   deserializeJson(groundlight_json_doc, get_detectors(endpoint, apiToken));
   JsonArray detectors = groundlight_json_doc["results"];
@@ -375,12 +374,19 @@ detector_list get_detector_list(const char *endpoint, const char *apiToken) {
   for (int i = 0; i < detectors.size(); i++)
   {
     _detector_list[i].confidence_threshold = detectors[i]["confidence_threshold"];
-    strcpy(_detector_list[i].id, detectors[i]["id"]);
-    strcpy(_detector_list[i].type, detectors[i]["type"]);
-    strcpy(_detector_list[i].created_at, detectors[i]["created_at"]);
-    strcpy(_detector_list[i].name, detectors[i]["name"]);
-    strcpy(_detector_list[i].query, detectors[i]["query"]);
-    strcpy(_detector_list[i].group_name, detectors[i]["group_name"]);
+    strlcpy(_detector_list[i].id, detectors[i]["id"], sizeof(_detector_list[i].id));
+    strlcpy(_detector_list[i].type, detectors[i]["type"], sizeof(_detector_list[i].type));
+    strlcpy(_detector_list[i].created_at, detectors[i]["created_at"], sizeof((_detector_list[i].created_at)));
+    strlcpy(_detector_list[i].name, detectors[i]["name"], sizeof(_detector_list[i].name));
+    strlcpy(_detector_list[i].query, detectors[i]["query"], sizeof(_detector_list[i].query));
+    strlcpy(_detector_list[i].group_name, detectors[i]["group_name"], sizeof(_detector_list[i].group_name));
+    if (!detectors[i]["metadata"].isNull()) {
+          String metadataStr;
+          serializeJson(detectors[i]["metadata"], metadataStr);
+          strlcpy(_detector_list[i].metadata, metadataStr.c_str(), sizeof(_detector_list[i].metadata));
+      } else {
+          _detector_list[i].metadata[0] = '\0'; 
+      }
   }
   detector_list res = { _detector_list, detectors.size() };
   return res;
@@ -401,16 +407,38 @@ String detector_to_string(detector d) {
   res += d.group_name;
   res += "\n\tConfidence threshold: ";
   res += d.confidence_threshold;
+  res += "\n\tMetadata: "; 
+  res += d.metadata; 
   return res;
 }
 
 detector get_detector_by_id(const char *endpoint, const char *detectorId, const char *apiToken) {
   detector_list detectors = get_detector_list(endpoint, apiToken);
+  detector det = { "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", 0.0, "None" };
   for (int i = 0; i < detectors.size; i++) {
     if (String(detectors.detectors[i].id) == String(detectorId)) {
-      return detectors.detectors[i];
+      det = detectors.detectors[i];
+      break;
     }
   }
-  return detector { "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", 0.0 };
+  if (0<detectors.size){
+    delete[] detectors.detectors;
+  } 
+  return det;
+}
+
+detector get_detector_by_name(const char *endpoint, const char *detectorName, const char *apiToken) {
+  detector_list detectors = get_detector_list(endpoint, apiToken);
+  detector det = { "NONE", "NONE", "NONE", "NONE", "NONE", "NONE", 0.0, "None" };
+  for (int i = 0; i < detectors.size; i++) {
+    if (String(detectors.detectors[i].name) == String(detectorName)) {
+      det = detectors.detectors[i]; 
+    }
+  }
+  if (0<detectors.size){
+    delete[] detectors.detectors;
+  }
+
+  return det;
 }
 #endif

@@ -295,30 +295,6 @@ const char index_html[] PROGMEM = R"rawliteral(
       background-color: #45a049;
     }
   </style>
-  </head><body>
-  <form action="/config">
-    WiFi SSID: <input type="text" name="ssid" value="%ssid%">
-    WiFi Password: <input type="password" name="pw" value="%password%"> 
-    API Key: <input type="password" name="api_key" value="%api_key%">
-    Autoconfig: <input type="checkbox" id="autoconfig" name="autoconfig" value="true" onchange="toggleAutoConfig()">
-    <div id="autoConfigMessage" style="display:none;" >
-      <p>If autoconfig is checked, all of the settings below will be ignored and get updated automatically.</p>
-    </div>
-    Detector Id: <input type="text" name="det_id" value="%det_id%">
-    Query Delay (seconds): <input type="text" name="query_delay" value="%query_delay%">
-    Endpoint: <input type="text" name="endpoint" value="%endpoint%">
-    Target Confidence: <input type="text" name="tConf" value="%tConf%">
-    Enable Motion Detector: <input type="checkbox" id="motionDetectorCheckbox" name="motionDetector" value="true" onchange="toggleMotionSettings()">
-    <div id="motionSettings" style="display:none;">
-      Motion Alpha (float between 0 and 1): <input type="text" name="mot_a" value="%mot_a%">
-      Motion Beta (float between 0 and 1): <input type="text" name="mot_b" value="%mot_b%">
-    </div>
-    Enable Stacklight: <input type="checkbox" id="stacklightCheckbox" name="stacklightbox" value="true" onchange="toggleStacklightSettings()">
-    <div id="stacklightSettings" style="display:none;">
-      Stacklight UUID: <input type="text" name="sl_uuid" value="%sl_uuid%">
-    </div>
-    <input type="submit" value="Submit">
-  </form>
   <script>
   function toggleAutoConfig() {
     var isChecked = document.getElementById('autoconfig').checked;
@@ -333,6 +309,35 @@ const char index_html[] PROGMEM = R"rawliteral(
     document.getElementById('stacklightSettings').style.display = isChecked ? 'block' : 'none';
   }
   </script>
+  </head><body>
+  <form action="/config">
+    WiFi SSID: <input type="text" name="ssid" value="%ssid%">
+    WiFi Password: <input type="password" name="pw" value="%password%"> 
+    API Key: <input type="password" name="api_key" value="%api_key%">
+    Autoconfig: <input type="checkbox" id="autoconfig" name="autoconfig" value="true" onchange="toggleAutoConfig()">
+    <div id="autoConfigMessage" style="display:none;" >
+      <p>If autoconfig is checked, all of the settings below will be ignored and get updated automatically.</p>
+    </div>
+    Detector Id: <input type="text" name="det_id" value="%det_id%">
+    Query Delay (seconds): <input type="text" name="query_delay" value="%query_delay%">
+    Endpoint: <input type="text" name="endpoint" value="%endpoint%">
+    Target Confidence: <input type="text" name="tConf" value="%tConf%">)rawliteral"
+    #ifdef ENABLE_STACKLIGHT
+    R"rawliteral(
+      Enable Motion Detector: <input type="checkbox" id="motionDetectorCheckbox" name="motionDetector" value="true" onchange="toggleMotionSettings()">
+      <div id="motionSettings" style="display:none;">
+        Motion Alpha (float between 0 and 1): <input type="text" name="mot_a" value="%mot_a%"><br>
+        Motion Beta (float between 0 and 1): <input type="text" name="mot_b" value="%mot_b%">
+      </div>
+      Enable Stacklight: <input type="checkbox" id="stacklightCheckbox" name="stacklightbox" value="true" onchange="toggleStacklightSettings()">
+      <div id="stacklightSettings" style="display:none;">
+        Stacklight UUID: <input type="text" name="sl_uuid" value="%sl_uuid%">
+      </div>
+    )rawliteral"
+    #else
+    #endif
+   R"rawliteral( <input type="submit" value="Submit">
+  </form>
 </body></html>
 )rawliteral";
 
@@ -396,7 +401,7 @@ void performAutoConfig(AsyncWebServerRequest *request){
   detector esp_det = get_detector_by_name(endpoint, esp_detector_name.c_str(), apiToken); 
   if (strcmp(esp_det.id, "NONE") == 0) {
     preferences.putString("det_id", "DETECTOR NOT FOUND");
-    Serial.println("Error: Detector not found.");
+    debug_printf("Error: Detector not found.");
     return; 
   }
   preferences.putString("det_id", esp_det.id);
@@ -405,8 +410,8 @@ void performAutoConfig(AsyncWebServerRequest *request){
   DynamicJsonDocument metadataDoc(1024);
   DeserializationError error = deserializeJson(metadataDoc, metadataStr);
   if (error) {
-    Serial.print(F("deserializeJson() failed: "));
-    Serial.println(error.c_str());
+    debug_printf(("deserializeJson() failed: "));
+    debug_printf(error.c_str());
     return; 
   }
   if (metadataDoc.containsKey("Query Delay (seconds)") && !metadataDoc["Query Delay (seconds)"].isNull()) {

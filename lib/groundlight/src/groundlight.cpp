@@ -374,12 +374,12 @@ detector_list get_detector_list(const char *endpoint, const char *apiToken) {
   for (int i = 0; i < detectors.size(); i++)
   {
     _detector_list[i].confidence_threshold = detectors[i]["confidence_threshold"];
-    strcpy(_detector_list[i].id, detectors[i]["id"]);
-    strcpy(_detector_list[i].type, detectors[i]["type"]);
-    strcpy(_detector_list[i].created_at, detectors[i]["created_at"]);
-    strcpy(_detector_list[i].name, detectors[i]["name"]);
-    strcpy(_detector_list[i].query, detectors[i]["query"]);
-    strcpy(_detector_list[i].group_name, detectors[i]["group_name"]);
+    strlcpy(_detector_list[i].id, detectors[i]["id"], sizeof(_detector_list[i].id));
+    strlcpy(_detector_list[i].type, detectors[i]["type"], sizeof(_detector_list[i].type));
+    strlcpy(_detector_list[i].created_at, detectors[i]["created_at"], sizeof((_detector_list[i].created_at)));
+    strlcpy(_detector_list[i].name, detectors[i]["name"], sizeof(_detector_list[i].name));
+    strlcpy(_detector_list[i].query, detectors[i]["query"], sizeof(_detector_list[i].query));
+    strlcpy(_detector_list[i].group_name, detectors[i]["group_name"], sizeof(_detector_list[i].group_name));
     if (!detectors[i]["metadata"].isNull()) {
           String metadataStr;
           serializeJson(detectors[i]["metadata"], metadataStr);
@@ -418,6 +418,7 @@ detector get_detector_by_id(const char *endpoint, const char *detectorId, const 
   for (int i = 0; i < detectors.size; i++) {
     if (String(detectors.detectors[i].id) == String(detectorId)) {
       det = detectors.detectors[i];
+      break;
     }
   }
   if (0<detectors.size){
